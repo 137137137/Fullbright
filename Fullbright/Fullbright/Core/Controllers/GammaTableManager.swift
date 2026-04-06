@@ -4,8 +4,6 @@
 //
 //  Default gamma table and scaled gamma application.
 //
-//  Lunar's GammaTable._adjust + GammaTable.apply on gammaQueue.
-//
 
 import Foundation
 import AppKit
@@ -64,7 +62,7 @@ final class GammaTableManager: GammaTableManaging {
         let sumB = defaultGammaBlue.reduce(0, +)
 
         if sumR + sumG + sumB == 0.0 {
-            logger.warning("Gamma table is all zeros, using linear identity fallback (Lunar: GammaTable.original)")
+            logger.warning("Gamma table is all zeros, using linear identity fallback")
             setLinearIdentityGamma()
             return
         }
@@ -72,7 +70,7 @@ final class GammaTableManager: GammaTableManaging {
         logger.info("Read gamma table: count=\(count, privacy: .public), R[0]=\(self.defaultGammaRed[0], privacy: .public), R[127]=\(self.defaultGammaRed[127], privacy: .public), R[255]=\(self.defaultGammaRed[255], privacy: .public), G[255]=\(self.defaultGammaGreen[255], privacy: .public), B[255]=\(self.defaultGammaBlue[255], privacy: .public)")
     }
 
-    /// Lunar's GammaTable.original: linear ramp [0/255, 1/255, ..., 255/255]
+    /// Linear identity ramp [0/255, 1/255, ..., 255/255]
     private func setLinearIdentityGamma() {
         defaultGammaCount = Constants.tableSize
         for i in 0..<Int(Constants.tableSize) {
@@ -180,7 +178,7 @@ final class GammaTableManager: GammaTableManaging {
 
     // MARK: - Max EDR Polynomial
 
-    /// Lunar's maxEDR polynomial (constants read from binary at 0x100aa97xx)
+    /// Max EDR polynomial for mapping EDR headroom to brightness ceiling
     private static func computeMaxEDR(edr: Double) -> Float {
         let rawMax = edr * 0.227317 + 0.899816 + edr * edr * (-0.00590745)
         let capped = max(1.5667381, rawMax)

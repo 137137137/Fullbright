@@ -2,8 +2,8 @@
 //  XDRController.swift
 //  Fullbright
 //
-//  XDR brightness orchestrator via Lunar's exact handleEnhance flow (Ghidra-verified).
-//  Delegates to focused managers: DisplayServicesClient, NightShiftManager,
+//  XDR brightness orchestrator.
+//  Delegates to DisplayServicesClient, NightShiftManager,
 //  GammaTableManager, HDRWindow.
 //
 //  Enable flow:
@@ -61,7 +61,7 @@ final class XDRController: XDRControlling {
     }
 
     private enum SLSMode {
-        /// SLSConfigureDisplayEnabled mode values (from Lunar binary)
+        /// SLSConfigureDisplayEnabled mode values
         static let configModes: [UInt32] = [4, 3, 5, 2]
     }
 
@@ -122,16 +122,16 @@ final class XDRController: XDRControlling {
             supported = false
         }
 
-        // Read the default gamma table NOW at init (Lunar: defaultGammaTable is set during Display init).
+        // Read the default gamma table at init before anything modifies it.
         self.gammaManager.readDefaultGamma(displayID: self.displayID)
 
-        // Configure the display for XDR capability (Lunar: DisplayController.en() at startup).
+        // Configure the display for XDR capability.
         if supported {
             Self.configureDisplayForXDR(self.displayID)
         }
     }
 
-    /// Lunar: Display.configure() -> SLSConfigureDisplayEnabled -> CGCompleteDisplayConfiguration
+    /// SLSConfigureDisplayEnabled -> CGCompleteDisplayConfiguration
     private static func configureDisplayForXDR(_ displayID: UInt32) {
         typealias SLSConfigFn = @convention(c) (OpaquePointer, UInt32, UInt32) -> Int32
 

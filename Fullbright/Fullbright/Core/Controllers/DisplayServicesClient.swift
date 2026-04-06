@@ -8,11 +8,11 @@
 import Foundation
 import CoreGraphics
 
-// Verified function signatures from Ghidra + LLDB:
+// DisplayServices function signatures:
 private typealias DSGetBrightnessFunc = @convention(c) (UInt32, UnsafeMutablePointer<Float>) -> Int32
 private typealias DSSetBrightnessFunc = @convention(c) (UInt32, Float) -> Int32
 private typealias DSSetLinearBrightnessFunc = @convention(c) (UInt32, Float) -> Int32
-// EnableALC takes TWO params: (displayID, enabled) — verified from Ghidra call sites
+// EnableALC takes TWO params: (displayID, enabled)
 private typealias DSEnableALCFunc = @convention(c) (UInt32, Bool) -> Int32
 
 private let displayServicesPath = "/System/Library/PrivateFrameworks/DisplayServices.framework/Versions/A/DisplayServices"

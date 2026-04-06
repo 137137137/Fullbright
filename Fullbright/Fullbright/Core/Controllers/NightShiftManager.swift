@@ -26,7 +26,7 @@ final class NightShiftManager: NightShiftManaging {
         var status = [UInt8](repeating: 0, count: 512)
         typealias Fn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Bool
         _ = unsafeBitCast(client.method(for: sel), to: Fn.self)(client, sel, &status)
-        // Ghidra: byte at offset 1 is the enabled field
+        // Byte at offset 1 is the enabled field
         return status[1] != 0
     }
 

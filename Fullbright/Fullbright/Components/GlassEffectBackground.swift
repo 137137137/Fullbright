@@ -2,7 +2,7 @@
 //  GlassEffectBackground.swift
 //  Fullbright
 //
-//  Private NSGlassEffectView wrapper, matching Lunar's approach (variant 6).
+//  Private NSGlassEffectView wrapper (variant 6).
 //  Used as a background — SwiftUI content is overlaid via .overlay() or ZStack,
 //  NOT embedded inside the NSView, so SwiftUI state updates propagate normally.
 //
