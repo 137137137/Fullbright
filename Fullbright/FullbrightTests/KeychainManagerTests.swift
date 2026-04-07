@@ -20,7 +20,7 @@ struct KeychainManagerTests {
 
     @Test("save then load returns the same bytes")
     func saveLoad_roundTrip() throws {
-        let keychain = KeychainManager.shared
+        let keychain = KeychainManager()
         let key = scopedKey()
         defer { try? keychain.delete(for: key) }
 
@@ -31,12 +31,12 @@ struct KeychainManagerTests {
 
     @Test("load returns nil for an unknown key")
     func load_unknownKey_isNil() {
-        #expect(KeychainManager.shared.load(for: "fb-test-unknown-\(UUID().uuidString)") == nil)
+        #expect(KeychainManager().load(for: "fb-test-unknown-\(UUID().uuidString)") == nil)
     }
 
     @Test("save overwrites an existing value at the same key")
     func save_overwritesExistingValue() throws {
-        let keychain = KeychainManager.shared
+        let keychain = KeychainManager()
         let key = scopedKey()
         defer { try? keychain.delete(for: key) }
 
@@ -47,7 +47,7 @@ struct KeychainManagerTests {
 
     @Test("delete removes the value; load then returns nil")
     func delete_removesValue() throws {
-        let keychain = KeychainManager.shared
+        let keychain = KeychainManager()
         let key = scopedKey()
 
         try keychain.save(Data("to-be-deleted".utf8), for: key)
@@ -58,7 +58,7 @@ struct KeychainManagerTests {
     @Test("delete on a missing key does not throw")
     func delete_missingKey_doesNotThrow() {
         #expect(throws: Never.self) {
-            try KeychainManager.shared.delete(for: "fb-test-nope-\(UUID().uuidString)")
+            try KeychainManager().delete(for: "fb-test-nope-\(UUID().uuidString)")
         }
     }
 }
