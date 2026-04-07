@@ -2,10 +2,11 @@
 //  SettingsViewModel.swift
 //  Fullbright
 //
-//  Settings window view model.
+//  Settings window view model. Does NOT import AppKit directly — dock
+//  visibility and URL opening both go through injected protocols.
 //
 
-import AppKit
+import Foundation
 import Sparkle
 import os
 
@@ -18,7 +19,8 @@ final class SettingsViewModel {
     let updaterController: SPUStandardUpdaterController
     private let launchManager: any LaunchAtLoginManaging
     private let defaults: UserDefaults
-    private let dockVisibilitySetter: @MainActor (Bool) -> Void
+    private let dockController: any DockVisibilityControlling
+    private let urlOpener: any URLOpening
 
     var licenseKey = ""
     private(set) var isActivating = false
@@ -36,11 +38,8 @@ final class SettingsViewModel {
     }
 
     var showInDock: Bool {
-        get { defaults.bool(forKey: DefaultsKey.showInDock) }
-        set {
-            defaults.set(newValue, forKey: DefaultsKey.showInDock)
-            dockVisibilitySetter(newValue)
-        }
+        get { dockController.isVisible }
+        set { dockController.isVisible = newValue }
     }
 
     struct AlertInfo: Identifiable {
@@ -51,14 +50,16 @@ final class SettingsViewModel {
 
     init(authManager: any AuthenticationManaging,
          updaterController: SPUStandardUpdaterController,
-         launchManager: any LaunchAtLoginManaging = LaunchAtLoginManager(),
-         defaults: UserDefaults = .standard,
-         dockVisibilitySetter: @escaping @MainActor (Bool) -> Void = setDockVisibility) {
+         launchManager: any LaunchAtLoginManaging,
+         dockController: any DockVisibilityControlling,
+         urlOpener: any URLOpening,
+         defaults: UserDefaults = .standard) {
         self.authManager = authManager
         self.updaterController = updaterController
         self.launchManager = launchManager
+        self.dockController = dockController
+        self.urlOpener = urlOpener
         self.defaults = defaults
-        self.dockVisibilitySetter = dockVisibilitySetter
         #if DEBUG
         self.debugActions = DebugAuthActions(authManager: authManager)
         #endif
@@ -107,7 +108,7 @@ final class SettingsViewModel {
     }
 
     func purchaseLicense() {
-        NSWorkspace.shared.open(AppURL.purchaseLicense)
+        urlOpener.open(AppURL.purchaseLicense)
     }
 
     // MARK: - Debug Actions

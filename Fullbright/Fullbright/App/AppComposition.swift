@@ -31,6 +31,7 @@ struct AppDependencies {
     let osdEventRouter: any OSDEventRouting
     let updaterController: SPUStandardUpdaterController
     let restoreGammaIfNeeded: @MainActor () -> Void
+    let dockController: any DockVisibilityControlling
     let menuBarViewModel: MenuBarViewModel
     let settingsViewModel: SettingsViewModel
 }
@@ -112,14 +113,24 @@ enum AppComposition {
             userDriverDelegate: nil
         )
 
+        // --- AppKit adapters (the ONLY place ViewModels touch AppKit) ---
+        let appLifecycle: any AppLifecycle = DefaultAppLifecycle()
+        let urlOpener: any URLOpening = DefaultURLOpener()
+        let dockController: any DockVisibilityControlling = DefaultDockVisibilityController()
+        let launchManager: any LaunchAtLoginManaging = LaunchAtLoginManager()
+
         let menuBarViewModel = MenuBarViewModel(
             xdrController: xdrController,
             authManager: authManager,
-            updaterController: updaterController
+            updaterController: updaterController,
+            appLifecycle: appLifecycle
         )
         let settingsViewModel = SettingsViewModel(
             authManager: authManager,
-            updaterController: updaterController
+            updaterController: updaterController,
+            launchManager: launchManager,
+            dockController: dockController,
+            urlOpener: urlOpener
         )
 
         // Capture the shared dirty store so crash recovery runs through
@@ -137,6 +148,7 @@ enum AppComposition {
             osdEventRouter: osdEventRouter,
             updaterController: updaterController,
             restoreGammaIfNeeded: restoreGammaIfNeeded,
+            dockController: dockController,
             menuBarViewModel: menuBarViewModel,
             settingsViewModel: settingsViewModel
         )

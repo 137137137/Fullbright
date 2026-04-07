@@ -6,11 +6,6 @@
 import AppKit
 
 @MainActor
-func setDockVisibility(_ visible: Bool) {
-    NSApp.setActivationPolicy(visible ? .regular : .accessory)
-}
-
-@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var coordinator: AppCoordinator?
     private var onboardingWindowController: OnboardingWindowController?
@@ -27,8 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // If gamma was left dirty by a previous crash, restore it now
         coordinator?.restoreStateAfterCrash()
 
-        let showInDock = UserDefaults.standard.bool(forKey: DefaultsKey.showInDock)
-        setDockVisibility(showInDock)
+        // Apply the persisted Dock visibility preference via the coordinator's
+        // DockVisibilityControlling so there's a single source of truth for
+        // this setting (previously this duplicated logic in SettingsViewModel).
+        coordinator?.dockController.applyPersistedPreference()
 
         // Wire onboarding callback from settings (DEBUG only)
         #if DEBUG
@@ -78,8 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(true, forKey: DefaultsKey.hasCompletedOnboarding)
 
             if isFirstLaunch {
-                UserDefaults.standard.set(false, forKey: DefaultsKey.showInDock)
-                setDockVisibility(false)
+                // Default dock visibility to off on first launch. Route through
+                // the coordinator's dock controller so the single-source-of-truth
+                // contract holds.
+                self?.coordinator?.dockController.isVisible = false
             }
 
             self?.coordinator?.handleOnboardingCompleted()

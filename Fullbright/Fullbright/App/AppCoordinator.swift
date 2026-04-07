@@ -27,6 +27,7 @@ final class AppCoordinator {
     private let restoreGammaIfNeeded: @MainActor () -> Void
     private let authStateObserver: any AuthStateObserving
     private let osdEventRouter: any OSDEventRouting
+    let dockController: any DockVisibilityControlling
 
     init(dependencies: AppDependencies) {
         self.xdrController = dependencies.xdrController
@@ -37,6 +38,7 @@ final class AppCoordinator {
         self.osdEventRouter = dependencies.osdEventRouter
         self.updaterController = dependencies.updaterController
         self.restoreGammaIfNeeded = dependencies.restoreGammaIfNeeded
+        self.dockController = dependencies.dockController
         self.menuBarViewModel = dependencies.menuBarViewModel
         self.settingsViewModel = dependencies.settingsViewModel
 
