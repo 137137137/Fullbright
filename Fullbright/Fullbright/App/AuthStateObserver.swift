@@ -15,9 +15,13 @@ import os
 @MainActor
 protocol AuthStateObserving: AnyObject {
     /// Begins observing `authManager.authState`. The callback fires once per
-    /// distinct transition — the initial state does NOT trigger it. Calling
-    /// `start` while already observing is a no-op and logs a warning.
-    func start(onTransition: @MainActor @Sendable @escaping (AuthenticationState) -> Void)
+    /// distinct transition — the initial state does NOT trigger it.
+    ///
+    /// Async so callers (and tests) can guarantee the first observation
+    /// registration has completed before they mutate state; otherwise a
+    /// write landing before the Task body reaches `withObservationTracking`
+    /// would be silently missed.
+    func start(onTransition: @MainActor @Sendable @escaping (AuthenticationState) -> Void) async
     func stop()
 }
 
@@ -34,29 +38,40 @@ final class AuthStateObserver: AuthStateObserving {
         taskLock.withLock { $0?.cancel() }
     }
 
-    func start(onTransition: @MainActor @Sendable @escaping (AuthenticationState) -> Void) {
+    func start(onTransition: @MainActor @Sendable @escaping (AuthenticationState) -> Void) async {
         let authManager = self.authManager
-        let task = Task { @MainActor in
-            var lastState = authManager.authState
-            while !Task.isCancelled {
-                await withCheckedContinuation { continuation in
-                    withObservationTracking {
-                        _ = authManager.authState
-                    } onChange: {
-                        continuation.resume()
+        // Handshake: the Task body signals via this continuation as soon as
+        // its first `withObservationTracking` registration is installed.
+        // `start()` doesn't return until that signal arrives, so any state
+        // mutation the caller makes after `start()` is guaranteed to be seen.
+        await withCheckedContinuation { (ready: CheckedContinuation<Void, Never>) in
+            let task = Task { @MainActor in
+                var lastState = authManager.authState
+                var didSignalReady = false
+                while !Task.isCancelled {
+                    await withCheckedContinuation { (changeContinuation: CheckedContinuation<Void, Never>) in
+                        withObservationTracking {
+                            _ = authManager.authState
+                        } onChange: {
+                            changeContinuation.resume()
+                        }
+                        if !didSignalReady {
+                            didSignalReady = true
+                            ready.resume()
+                        }
+                    }
+                    guard !Task.isCancelled else { return }
+                    let newState = authManager.authState
+                    if newState != lastState {
+                        onTransition(newState)
+                        lastState = newState
                     }
                 }
-                guard !Task.isCancelled else { return }
-                let newState = authManager.authState
-                if newState != lastState {
-                    onTransition(newState)
-                    lastState = newState
-                }
             }
-        }
-        taskLock.withLock { existing in
-            existing?.cancel()
-            existing = task
+            taskLock.withLock { existing in
+                existing?.cancel()
+                existing = task
+            }
         }
     }
 

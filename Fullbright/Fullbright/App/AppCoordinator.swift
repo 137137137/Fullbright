@@ -40,20 +40,26 @@ final class AppCoordinator {
         self.menuBarViewModel = dependencies.menuBarViewModel
         self.settingsViewModel = dependencies.settingsViewModel
 
-        // Kick off the initial auth check. Deferred out of
-        // SecureAuthenticationManager.init so the background Task it
-        // posts doesn't capture a half-initialized self.
-        Task { @MainActor in
-            await self.authManager.start()
-        }
-
-        // Wire hardware input → XDR controller → OSD.
+        // Wire hardware input → XDR controller → OSD. This doesn't depend
+        // on auth state so it can happen first.
         osdEventRouter.attach(to: keyManager)
 
-        // React to auth-state transitions and re-sync XDR + key manager.
+        // Initial XDR sync reflects the starting authState (typically
+        // .notAuthenticated on first launch). Subsequent transitions
+        // are driven by the observer below.
         syncXDRState()
-        authStateObserver.start { [weak self] _ in
-            self?.syncXDRState()
+
+        // Kick off the initial auth check and start the observer in a
+        // single Task. We await the observer's handshake so any auth
+        // state mutations downstream of auth.start() are guaranteed to
+        // fire transition callbacks.
+        let authManager = self.authManager
+        let authStateObserver = self.authStateObserver
+        Task { @MainActor [weak self] in
+            await authStateObserver.start { [weak self] _ in
+                self?.syncXDRState()
+            }
+            await authManager.start()
         }
     }
 

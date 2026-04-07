@@ -49,7 +49,7 @@ struct AuthStateObserverTests {
         let observer = AuthStateObserver(authManager: auth)
         let count = OSAllocatedUnfairLock<Int>(initialState: 0)
 
-        observer.start { @MainActor _ in
+        await observer.start { @MainActor _ in
             count.withLock { $0 += 1 }
         }
 
@@ -66,7 +66,7 @@ struct AuthStateObserverTests {
         let observer = AuthStateObserver(authManager: auth)
         let count = OSAllocatedUnfairLock<Int>(initialState: 0)
 
-        observer.start { @MainActor _ in
+        await observer.start { @MainActor _ in
             count.withLock { $0 += 1 }
         }
 
@@ -87,7 +87,7 @@ struct AuthStateObserverTests {
         let observer = AuthStateObserver(authManager: auth)
         let count = OSAllocatedUnfairLock<Int>(initialState: 0)
 
-        observer.start { @MainActor _ in
+        await observer.start { @MainActor _ in
             count.withLock { $0 += 1 }
         }
 
@@ -106,7 +106,7 @@ struct AuthStateObserverTests {
         let observer = AuthStateObserver(authManager: auth)
         let count = OSAllocatedUnfairLock<Int>(initialState: 0)
 
-        observer.start { @MainActor _ in
+        await observer.start { @MainActor _ in
             count.withLock { $0 += 1 }
         }
 
