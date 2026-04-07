@@ -2,19 +2,11 @@
 //  AuthTestDoubles.swift
 //  FullbrightTests
 //
-//  In-memory test doubles for the auth/storage/integrity protocols, so the
-//  authentication state machine can be exercised without touching keychain,
-//  the filesystem, or the network.
-//
 
 import Foundation
 import os
 @testable import Fullbright
 
-// MARK: - InMemoryKeychain
-
-/// Sendable in-memory keychain replacement. Uses an unfair lock so it can
-/// satisfy `KeychainProviding`'s `Sendable` requirement while remaining mutable.
 final class InMemoryKeychain: KeychainProviding, @unchecked Sendable {
     private let lock = OSAllocatedUnfairLock<[String: Data]>(initialState: [:])
 
@@ -31,9 +23,6 @@ final class InMemoryKeychain: KeychainProviding, @unchecked Sendable {
     }
 }
 
-// MARK: - InMemorySecureStorage
-
-/// MainActor-isolated in-memory replacement for `SecureFileStorage`.
 @MainActor
 final class InMemorySecureStorage: SecureStorageProviding {
     private var blobs: [String: Data] = [:]
@@ -54,8 +43,6 @@ final class InMemorySecureStorage: SecureStorageProviding {
     }
 }
 
-// MARK: - Stubs
-
 struct StubDeviceIdentifier: DeviceIdentifying {
     let secureIdentifier: String
     init(_ id: String = "test-device-id") { self.secureIdentifier = id }
@@ -67,9 +54,6 @@ struct StubIntegrityChecker: IntegrityChecking {
     func passesAllChecks() -> Bool { passes }
 }
 
-// MARK: - StubAuthServerClient
-
-/// Configurable in-memory replacement for `AuthServerClient`.
 final class StubAuthServerClient: AuthServerClientProviding, @unchecked Sendable {
     struct State: Sendable {
         var trialResult: TrialRegistrationResult = .confirmed
@@ -108,11 +92,6 @@ final class StubAuthServerClient: AuthServerClientProviding, @unchecked Sendable
     }
 }
 
-// MARK: - StubTrialManager / StubLicenseManager
-//
-// These exist to drive `SecureAuthenticationManager` tests deterministically
-// without depending on TrialManager/LicenseManager's async server confirmation.
-
 @MainActor
 final class StubTrialManager: TrialManaging {
     var nextCheckResult: AuthenticationState = .notAuthenticated
@@ -135,7 +114,6 @@ final class StubTrialManager: TrialManaging {
         stateChangeHandler = handler
     }
 
-    /// Triggers the registered state-change handler (simulates async server response).
     func emitStateChange(_ state: AuthenticationState) {
         stateChangeHandler?(state)
     }
@@ -184,7 +162,6 @@ final class StubLicenseManager: LicenseManaging {
         revokeCallCount += 1
     }
 
-    /// Triggers the registered state-change handler (simulates async server response).
     func emitStateChange(_ state: AuthenticationState) {
         stateChangeHandler?(state)
     }

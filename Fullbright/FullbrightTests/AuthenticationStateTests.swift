@@ -9,8 +9,6 @@ import Testing
 
 struct AuthenticationStateTests {
 
-    // MARK: - canUseXDR
-
     @Test func canUseXDR_authenticated_isTrue() {
         #expect(AuthenticationState.authenticated(licenseKey: "ABC").canUseXDR)
     }
@@ -27,8 +25,6 @@ struct AuthenticationStateTests {
     @Test func canUseXDR_notAuthenticated_isFalse() {
         #expect(AuthenticationState.notAuthenticated.canUseXDR == false)
     }
-
-    // MARK: - isTrialUrgent
 
     @Test func isTrialUrgent_zeroDays_isTrue() {
         #expect(AuthenticationState.trial(daysRemaining: 0, expiryDate: Date()).isTrialUrgent)
@@ -54,8 +50,6 @@ struct AuthenticationStateTests {
         #expect(AuthenticationState.expired.isTrialUrgent == false)
     }
 
-    // MARK: - isAuthenticated
-
     @Test func isAuthenticated_onlyAuthenticatedCase() {
         #expect(AuthenticationState.authenticated(licenseKey: "X").isAuthenticated)
         #expect(AuthenticationState.notAuthenticated.isAuthenticated == false)
@@ -63,8 +57,6 @@ struct AuthenticationStateTests {
         let trial = AuthenticationState.trial(daysRemaining: 5, expiryDate: Date())
         #expect(trial.isAuthenticated == false)
     }
-
-    // MARK: - Equatable
 
     @Test func equatable_distinguishesTrialDays() {
         let date = Date()

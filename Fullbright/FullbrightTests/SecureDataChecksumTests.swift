@@ -9,8 +9,6 @@ import Testing
 
 struct SecureDataChecksumTests {
 
-    // MARK: - SecureLicenseData
-
     @Test func licenseData_freshlyConstructed_isValid() {
         let data = SecureLicenseData(
             licenseKey: "ABC-123",
@@ -46,8 +44,6 @@ struct SecureDataChecksumTests {
         )
         #expect(a.checksum != b.checksum)
     }
-
-    // MARK: - SecureTrialData
 
     @Test func trialData_freshlyConstructed_isValid() {
         let data = SecureTrialData(

@@ -42,8 +42,6 @@ final class GammaTableManager: GammaTableManaging {
     private var appliedBrightness: Float = 0.0
     private var hasLoggedScaling = false
 
-    /// Render loop driven by a Task instead of a Timer so the body runs
-    /// inside MainActor isolation directly (no `assumeIsolated` shim).
     @ObservationIgnored private var renderTask: Task<Void, Never>?
 
     // MARK: - Read Default Gamma
@@ -121,8 +119,6 @@ final class GammaTableManager: GammaTableManaging {
         startRenderLoop(displayID: displayID)
     }
 
-    /// Drives a ~60Hz lerp toward `targetBrightness`, applying gamma every tick.
-    /// Uses a Task on the main actor so the body is fully MainActor-isolated.
     private func startRenderLoop(displayID: UInt32) {
         renderTask?.cancel()
         renderTask = Task { @MainActor [weak self] in

@@ -23,8 +23,6 @@ struct LicenseManagerTests {
         return (manager, storage, server)
     }
 
-    // MARK: - checkLicense
-
     @Test func checkLicense_noStoredData_isNil() {
         let (manager, _, _) = makeManager()
         #expect(manager.checkLicense() == nil)
@@ -42,7 +40,7 @@ struct LicenseManagerTests {
     }
 
     @Test func checkLicense_deviceMismatch_returnsNilAndDeletesData() throws {
-        let (manager, storage, _) = makeManager()  // device-A
+        let (manager, storage, _) = makeManager()
         let licenseData = SecureLicenseData(
             licenseKey: "MY-KEY",
             activationDate: Date(),
@@ -50,11 +48,8 @@ struct LicenseManagerTests {
         )
         try storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
         #expect(manager.checkLicense() == nil)
-        // Mismatched data should be cleaned up
         #expect(storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) == nil)
     }
-
-    // MARK: - activateLicense
 
     @Test func activateLicense_serverSuccess_persistsAndReturnsSuccess() async {
         let (manager, storage, server) = makeManager()
@@ -74,8 +69,6 @@ struct LicenseManagerTests {
         let stored = storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData)
         #expect(stored == nil)
     }
-
-    // MARK: - revokeLicense
 
     @Test func revokeLicense_removesStoredData() throws {
         let (manager, storage, _) = makeManager()

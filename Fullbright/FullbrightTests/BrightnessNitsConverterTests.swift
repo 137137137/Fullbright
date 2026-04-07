@@ -13,7 +13,6 @@ struct BrightnessNitsConverterTests {
     }
 
     @Test func sdrMidpointIsHalfOfSdrMax() {
-        // brightness 0.25 -> 0.25 * 2 * 500 = 250 nits
         #expect(BrightnessNitsConverter.nits(from: 0.25, maxEDR: 1.5) == 250)
     }
 

@@ -2,9 +2,6 @@
 //  SecureAuthenticationManagerTests.swift
 //  FullbrightTests
 //
-//  Tests for the auth state machine driven by injected stubs for the
-//  trial/license managers, integrity checker, and storage.
-//
 
 import Foundation
 import Testing
@@ -32,15 +29,10 @@ struct SecureAuthenticationManagerTests {
         return (manager, trialManager, licenseManager)
     }
 
-    // MARK: - Initial state
-
     @Test func freshlyConstructed_isNotAuthenticatedBeforeStart() {
         let (manager, _, _) = makeManager()
-        // Per the deferred-init contract, no checks have run yet.
         #expect(manager.authState == .notAuthenticated)
     }
-
-    // MARK: - start()
 
     @Test func start_failedIntegrityCheck_setsExpired() {
         let (manager, _, _) = makeManager(integrityPasses: false)
@@ -65,7 +57,6 @@ struct SecureAuthenticationManagerTests {
         let (manager, _, license2) = makeManager(trial: trial, license: license)
         manager.start()
         #expect(manager.authState == .authenticated(licenseKey: "ABC"))
-        // Background validation should be kicked off when authenticated.
         #expect(license2.validateBackgroundCallCount == 1)
     }
 
@@ -80,8 +71,6 @@ struct SecureAuthenticationManagerTests {
         #expect(manager.authState == .trial(daysRemaining: 7, expiryDate: expiry))
     }
 
-    // MARK: - startTrial()
-
     @Test func startTrial_delegatesToTrialManager() {
         let trial = StubTrialManager()
         let expiry = Date(timeIntervalSinceNow: 86400 * 14)
@@ -92,8 +81,6 @@ struct SecureAuthenticationManagerTests {
         #expect(manager.authState == .trial(daysRemaining: 14, expiryDate: expiry))
     }
 
-    // MARK: - logout()
-
     @Test func logout_revokesLicenseAndExpires() {
         let license = StubLicenseManager()
         let (manager, _, license2) = makeManager(license: license)
@@ -102,8 +89,6 @@ struct SecureAuthenticationManagerTests {
         #expect(manager.authState == .expired)
     }
 
-    // MARK: - State change callbacks
-
     @Test func licenseRevocation_fallsBackToTrialState() {
         let trial = StubTrialManager()
         let license = StubLicenseManager()
@@ -111,9 +96,7 @@ struct SecureAuthenticationManagerTests {
         trial.nextCheckResult = .trial(daysRemaining: 5, expiryDate: expiry)
         let (manager, _, license2) = makeManager(trial: trial, license: license)
         manager.start()
-        // Simulate a server-side license revocation
         license2.emitStateChange(.expired)
-        // The handler in SecureAuthenticationManager checks the trial as a fallback
         #expect(manager.authState == .trial(daysRemaining: 5, expiryDate: expiry))
     }
 

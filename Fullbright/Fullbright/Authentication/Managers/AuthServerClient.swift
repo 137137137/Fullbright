@@ -34,9 +34,8 @@ final class AuthServerClient: AuthServerClientProviding, Sendable {
     private let appVersion: String
     private let encoder = JSONEncoder()
 
-    /// Constructs the client. The `session` parameter is required so callers
-    /// (the composition root in production, tests in unit tests) make an explicit
-    /// choice about TLS pinning rather than reaching into a singleton from `init`.
+    /// `session` is required so the caller picks the TLS pinning policy
+    /// (production uses CertificatePinningManager; tests use a plain session).
     init(apiBaseURL: URL = AppURL.apiBase,
          session: URLSession,
          appVersion: String = Bundle.main.appVersion) {

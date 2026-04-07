@@ -60,9 +60,7 @@ final class SecureAuthenticationManager: AuthenticationManaging {
             deviceIdentifier: resolvedDeviceIdentifier
         )
 
-        // Wire callbacks for async state changes from server responses.
-        // Safe to do here because the closures only fire on later main-actor turns,
-        // never synchronously during init.
+        // Server responses route back through these callbacks.
         self.trialManager.setOnStateChange { [weak self] state in
             self?.authState = state
         }
@@ -70,7 +68,7 @@ final class SecureAuthenticationManager: AuthenticationManaging {
             guard let self else { return }
             self.authState = state
             if case .expired = state {
-                // License revoked — fall through to trial check
+                // License revoked — fall back to trial if one is still valid
                 self.authState = self.trialManager.checkTrialStatus()
             }
         }
@@ -78,9 +76,8 @@ final class SecureAuthenticationManager: AuthenticationManaging {
 
     // MARK: - Lifecycle
 
-    /// Performs the initial authentication check and starts background monitoring.
-    /// Called by the composition root after construction. Must not be invoked from `init`,
-    /// because the launched Task captures `self` and would otherwise post before init completes.
+    /// Runs the initial check and starts monitoring. Kept out of `init` because
+    /// the background Task captures `self` — posting before init returns is dicey.
     func start() {
         if !integrityChecker.passesAllChecks() {
             authState = .expired
@@ -143,10 +140,8 @@ final class SecureAuthenticationManager: AuthenticationManaging {
         switch authState {
         case .authenticated(let licenseKey):
             let result = await licenseManager.validateLicense(licenseKey: licenseKey)
-            // Note: `.offline` and `.valid` both leave the state authenticated.
-            // This is the offline-grace policy: a temporarily-unreachable server
-            // must not lock out a paying user. Only an explicit `.invalid` from
-            // the server (license revoked) transitions to `.expired`.
+            // Offline grace: `.offline` and `.valid` both stay authenticated.
+            // Only an explicit `.invalid` (server revoked the license) expires it.
             if case .invalid = result {
                 authState = .expired
             }

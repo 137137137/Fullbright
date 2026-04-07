@@ -2,10 +2,6 @@
 //  TrialManagerTests.swift
 //  FullbrightTests
 //
-//  Synchronous tests for TrialManager — start, check, debug helpers. Async
-//  server confirmation paths are not exercised here (handled by
-//  SecureAuthenticationManagerTests via stub state-change callbacks).
-//
 
 import Foundation
 import Testing
@@ -29,8 +25,6 @@ struct TrialManagerTests {
         return (manager, storage, keychain, server)
     }
 
-    // MARK: - checkTrialStatus
-
     @Test func checkTrialStatus_noStoredData_isNotAuthenticated() {
         let (manager, _, _, _) = makeManager()
         #expect(manager.checkTrialStatus() == .notAuthenticated)
@@ -47,7 +41,6 @@ struct TrialManagerTests {
 
         let state = manager.checkTrialStatus()
         if case .trial(let daysRemaining, _) = state {
-            // 14 days from now → 14 (or 13, depending on hour rounding)
             #expect(daysRemaining >= 13 && daysRemaining <= 14)
         } else {
             Issue.record("Expected .trial state, got \(state)")
@@ -67,7 +60,7 @@ struct TrialManagerTests {
     }
 
     @Test func checkTrialStatus_deviceMismatch_returnsExpired() throws {
-        let (manager, storage, _, _) = makeManager()  // device-A
+        let (manager, storage, _, _) = makeManager()
         let trialData = SecureTrialData(
             startDate: Date(),
             deviceId: "different-device",
@@ -76,8 +69,6 @@ struct TrialManagerTests {
         try storage.saveEncrypted(trialData, for: StorageKey.trialData)
         #expect(manager.checkTrialStatus() == .expired)
     }
-
-    // MARK: - startTrial
 
     @Test func startTrial_freshDevice_returnsTrialState() {
         let (manager, _, _, _) = makeManager()
