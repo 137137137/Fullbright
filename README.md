@@ -24,7 +24,7 @@
 
 <br />
 
-<details>
+<details open>
   <summary>Table of Contents</summary>
   <ol>
     <li><a href="#about">About</a></li>

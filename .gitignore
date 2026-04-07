@@ -143,3 +143,8 @@ Fullbright/Sparkle/
 
 # Generated docs
 PROJECT_STRUCTURE.md
+
+# Release/deploy scripts
+release.sh
+RELEASE.md
+scripts/
