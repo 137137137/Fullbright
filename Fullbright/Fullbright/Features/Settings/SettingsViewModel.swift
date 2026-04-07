@@ -90,19 +90,20 @@ final class SettingsViewModel {
 
     func activateLicense() async {
         isActivating = true
-        let (success, message) = await authManager.activateLicense(licenseKey: licenseKey)
+        let result = await authManager.activateLicense(licenseKey: licenseKey)
         isActivating = false
 
-        if success {
+        switch result {
+        case .success:
             alertState = AlertInfo(
                 title: "Success",
                 message: "Your license has been successfully activated!"
             )
             licenseKey = ""
-        } else {
+        case .failure(let message):
             alertState = AlertInfo(
                 title: "Activation Failed",
-                message: message ?? "Invalid License. Please check your license key and try again."
+                message: message
             )
         }
     }

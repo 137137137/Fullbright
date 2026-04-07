@@ -21,9 +21,9 @@ struct CheckForUpdatesView: View {
         Button(action: viewModel.checkForUpdates) {
             HStack {
                 Image(systemName: "arrow.down.circle")
-                    .font(.system(size: 13))
+                    .font(MenuBarStyle.bodyFont)
                 Text("Check for Updates...")
-                    .font(.system(size: 13))
+                    .font(MenuBarStyle.bodyFont)
                 Spacer()
             }
             .frame(maxWidth: .infinity, alignment: .leading)

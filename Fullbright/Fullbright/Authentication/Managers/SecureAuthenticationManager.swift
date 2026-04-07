@@ -56,39 +56,23 @@ final class SecureAuthenticationManager: AuthenticationManaging {
         }
     }
 
-    /// All dependencies are required — no `.shared` defaults. Production
-    /// wiring lives in `AppComposition.makeDependencies`; tests wire up
-    /// their own doubles. The sub-manager parameters are optional only so
-    /// tests can either pass pre-built `StubTrialManager`/`StubLicenseManager`
-    /// instances OR let the initializer build the real implementations
-    /// against injected storage/network/keychain doubles.
-    init(storage: any SecureStorageProviding,
-         serverClient: any AuthServerClientProviding,
-         keychain: any KeychainProviding,
-         integrityChecker: any IntegrityChecking,
-         integrityMonitor: (any IntegrityMonitoring)? = nil,
+    /// All dependencies are required — no fallback construction.
+    /// Production wiring lives in `AppComposition.makeDependencies`;
+    /// tests wire up their own doubles.
+    init(integrityChecker: any IntegrityChecking,
+         integrityMonitor: any IntegrityMonitoring,
          deviceIdentifier: any DeviceIdentifying,
-         trialManager: (any TrialManaging)? = nil,
-         licenseManager: (any LicenseManaging)? = nil) {
+         trialManager: any TrialManaging,
+         licenseManager: any LicenseManaging) {
         self.integrityChecker = integrityChecker
-        self.integrityMonitor = integrityMonitor ?? IntegrityMonitor(checker: integrityChecker)
+        self.integrityMonitor = integrityMonitor
 
         #if DEBUG
         self.deviceIdentifier = deviceIdentifier
         #endif
 
-        self.trialManager = trialManager ?? TrialManager(
-            storage: storage,
-            serverClient: serverClient,
-            keychain: keychain,
-            deviceIdentifier: deviceIdentifier
-        )
-
-        self.licenseManager = licenseManager ?? LicenseManager(
-            storage: storage,
-            serverClient: serverClient,
-            deviceIdentifier: deviceIdentifier
-        )
+        self.trialManager = trialManager
+        self.licenseManager = licenseManager
     }
 
     // MARK: - Lifecycle
@@ -189,9 +173,9 @@ final class SecureAuthenticationManager: AuthenticationManaging {
 
     // MARK: - License Management
 
-    func activateLicense(licenseKey: String) async -> (success: Bool, message: String?) {
+    func activateLicense(licenseKey: String) async -> LicenseActivationResult {
         let result = await licenseManager.activateLicense(licenseKey: licenseKey)
-        if result.success {
+        if case .success = result {
             authState = AuthStateReducer.reduce(
                 current: authState,
                 event: .licenseActivatedLocally(licenseKey: licenseKey)

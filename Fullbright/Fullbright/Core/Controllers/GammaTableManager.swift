@@ -37,6 +37,11 @@ final class GammaTableManager: GammaTableManaging {
     @ObservationIgnored private var defaultGammaBlue = [Float](repeating: 0, count: 256)
     @ObservationIgnored private var defaultGammaCount: UInt32 = 0
 
+    // Reusable buffers for applyScaledGamma to avoid per-call allocations.
+    @ObservationIgnored private var scaledRed = [Float](repeating: 0, count: 256)
+    @ObservationIgnored private var scaledGreen = [Float](repeating: 0, count: 256)
+    @ObservationIgnored private var scaledBlue = [Float](repeating: 0, count: 256)
+
     private(set) var maxEDR: Float = 1.425738
     private var targetBrightness: Float = 0.0
     private var appliedBrightness: Float = 0.0
@@ -167,16 +172,18 @@ final class GammaTableManager: GammaTableManaging {
             hasLoggedScaling = true
         }
 
-        var red = [Float](repeating: 0, count: count)
-        var green = [Float](repeating: 0, count: count)
-        var blue = [Float](repeating: 0, count: count)
+        if scaledRed.count != count {
+            scaledRed = [Float](repeating: 0, count: count)
+            scaledGreen = [Float](repeating: 0, count: count)
+            scaledBlue = [Float](repeating: 0, count: count)
+        }
 
         var scale = scalingFactor
-        vDSP_vsmul(defaultGammaRed, 1, &scale, &red, 1, vDSP_Length(count))
-        vDSP_vsmul(defaultGammaGreen, 1, &scale, &green, 1, vDSP_Length(count))
-        vDSP_vsmul(defaultGammaBlue, 1, &scale, &blue, 1, vDSP_Length(count))
+        vDSP_vsmul(defaultGammaRed, 1, &scale, &scaledRed, 1, vDSP_Length(count))
+        vDSP_vsmul(defaultGammaGreen, 1, &scale, &scaledGreen, 1, vDSP_Length(count))
+        vDSP_vsmul(defaultGammaBlue, 1, &scale, &scaledBlue, 1, vDSP_Length(count))
 
-        _ = CGSetDisplayTransferByTable(displayID, UInt32(count), red, green, blue)
+        _ = CGSetDisplayTransferByTable(displayID, UInt32(count), scaledRed, scaledGreen, scaledBlue)
     }
 
     // MARK: - Max EDR Polynomial

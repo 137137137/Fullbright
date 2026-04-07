@@ -27,10 +27,7 @@ private func makeDependencies(
     let auth = StubAuthManager()
     auth.authState = authState
 
-    // The OSD controller is a concrete type that requires an XDRControlling;
-    // constructing it doesn't touch AppKit until `show()` is called, which
-    // none of these tests do.
-    let osdController = XDRBrightnessOSDWindowController(xdrController: xdr)
+    let osdController = StubOSDController()
     let osdEventRouter: any OSDEventRouting = OSDEventRouter(
         xdrController: xdr,
         osdController: osdController
@@ -79,6 +76,7 @@ private func makeDependencies(
 }
 
 @MainActor
+@discardableResult
 private func waitUntil(
     _ condition: @MainActor () -> Bool,
     timeout: Duration = .seconds(2)
@@ -254,5 +252,58 @@ struct AppCoordinatorAuthGateTests {
         try await Task.sleep(for: .milliseconds(80))
 
         #expect(xdr.enableCallCount == 0)
+    }
+
+    // MARK: - Lifecycle
+
+    @Test("prepareForTermination disables XDR when enabled")
+    func prepareForTermination_disablesXDRWhenEnabled() async throws {
+        let expiry = Date(timeIntervalSinceNow: 86400 * 7)
+        let (deps, auth, xdr, keyManager) = makeDependencies(
+            authState: .trial(daysRemaining: 7, expiryDate: expiry)
+        )
+        let coordinator = AppCoordinator(dependencies: deps)
+        await waitUntil { auth.startCallCount == 1 }
+        await waitUntil { xdr.isEnabled }
+
+        coordinator.prepareForTermination()
+
+        #expect(xdr.disableCallCount == 1)
+        #expect(keyManager.intercepting == false)
+    }
+
+    @Test("prepareForTermination is a no-op when XDR is not enabled")
+    func prepareForTermination_noOpWhenDisabled() async throws {
+        let (deps, _, xdr, _) = makeDependencies(authState: .notAuthenticated)
+        let coordinator = AppCoordinator(dependencies: deps)
+        try await Task.sleep(for: .milliseconds(80))
+
+        coordinator.prepareForTermination()
+
+        #expect(xdr.disableCallCount == 0)
+    }
+
+    @Test("handleOnboardingCompleted starts trial when not authenticated")
+    func handleOnboardingCompleted_startsTrialWhenNotAuthenticated() async throws {
+        let (deps, auth, _, _) = makeDependencies(authState: .notAuthenticated)
+        let coordinator = AppCoordinator(dependencies: deps)
+        try await Task.sleep(for: .milliseconds(80))
+
+        coordinator.handleOnboardingCompleted()
+
+        #expect(auth.startTrialCallCount == 1)
+    }
+
+    @Test("handleOnboardingCompleted does not start trial when authenticated")
+    func handleOnboardingCompleted_noOpWhenAuthenticated() async throws {
+        let (deps, auth, _, _) = makeDependencies(
+            authState: .authenticated(licenseKey: "KEY")
+        )
+        let coordinator = AppCoordinator(dependencies: deps)
+        try await Task.sleep(for: .milliseconds(80))
+
+        coordinator.handleOnboardingCompleted()
+
+        #expect(auth.startTrialCallCount == 0)
     }
 }

@@ -88,19 +88,25 @@ final class StubAuthManager: AuthenticationManaging {
     @ObservationIgnored var refreshCallCount = 0
     @ObservationIgnored var startTrialCallCount = 0
     @ObservationIgnored var activateLicenseCalls: [String] = []
-    @ObservationIgnored var nextActivationResult: (success: Bool, message: String?) = (true, nil)
+    @ObservationIgnored var nextActivationResult: LicenseActivationResult = .success
     @ObservationIgnored var logoutCallCount = 0
 
     func start() async { startCallCount += 1 }
     func refreshAuthenticationState() { refreshCallCount += 1 }
     func startTrial() { startTrialCallCount += 1 }
 
-    func activateLicense(licenseKey: String) async -> (success: Bool, message: String?) {
+    func activateLicense(licenseKey: String) async -> LicenseActivationResult {
         activateLicenseCalls.append(licenseKey)
         return nextActivationResult
     }
 
     func logout() { logoutCallCount += 1 }
+}
+
+@MainActor
+final class StubOSDController: OSDShowing {
+    private(set) var showCallCount = 0
+    func show() { showCallCount += 1 }
 }
 
 @MainActor

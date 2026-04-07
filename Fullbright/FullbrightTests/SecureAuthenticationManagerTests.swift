@@ -33,11 +33,10 @@ struct SecureAuthenticationManagerTests {
     ) -> (SecureAuthenticationManager, StubTrialManager, StubLicenseManager) {
         let trialManager = trial ?? StubTrialManager()
         let licenseManager = license ?? StubLicenseManager()
+        let checker = StubIntegrityChecker(passes: integrityPasses)
         let manager = SecureAuthenticationManager(
-            storage: InMemorySecureStorage(),
-            serverClient: StubAuthServerClient(),
-            keychain: InMemoryKeychain(),
-            integrityChecker: StubIntegrityChecker(passes: integrityPasses),
+            integrityChecker: checker,
+            integrityMonitor: IntegrityMonitor(checker: checker),
             deviceIdentifier: StubDeviceIdentifier(),
             trialManager: trialManager,
             licenseManager: licenseManager

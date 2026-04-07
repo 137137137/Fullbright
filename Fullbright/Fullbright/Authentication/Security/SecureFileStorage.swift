@@ -98,23 +98,24 @@ final class SecureFileStorage: SecureStorageProviding {
 
     // MARK: - File Storage Paths
 
-    private func storageURL(for key: String) -> URL {
-        let appDir: URL
+    private var storageDirectory: URL {
         if let override = storageDirectoryOverride {
-            appDir = override
-        } else {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory,
-                                                      in: .userDomainMask)[0]
-            let bundleID = Bundle.main.bundleIdentifier ?? AppIdentifier.serviceID
-            appDir = appSupport.appendingPathComponent(bundleID, isDirectory: true)
+            return override
         }
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory,
+                                                  in: .userDomainMask)[0]
+        let bundleID = Bundle.main.bundleIdentifier ?? AppIdentifier.serviceID
+        return appSupport.appendingPathComponent(bundleID, isDirectory: true)
+    }
 
-        try? FileManager.default.createDirectory(at: appDir,
-                                                withIntermediateDirectories: true)
+    private func ensureStorageDirectoryExists() {
+        try? FileManager.default.createDirectory(at: storageDirectory,
+                                                 withIntermediateDirectories: true)
+    }
 
+    private func storageURL(for key: String) -> URL {
         let hashedKey = Checksum.sha256(Data(key.utf8)).prefix(16)
-
-        return appDir.appendingPathComponent(".\(hashedKey)", isDirectory: false)
+        return storageDirectory.appendingPathComponent(".\(hashedKey)", isDirectory: false)
     }
 
     // MARK: - Storage Operations
@@ -198,6 +199,7 @@ final class SecureFileStorage: SecureStorageProviding {
         } catch {
             throw StorageError.encodingFailed(underlying: error)
         }
+        ensureStorageDirectoryExists()
         try save(envelopeBytes, for: key)
     }
 

@@ -60,12 +60,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             signal(sig, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
             source.setEventHandler {
-                // SAFETY: These are called directly (bypassing AppCoordinator) because
-                // the coordinator may already be deallocated when a signal fires.
-                // XDRController's static methods and CGDisplayRestoreColorSyncSettings
-                // are safe to call from this context.
+                // SAFETY: Only async-signal-safe operations here. The coordinator
+                // may already be deallocated when a signal fires.
+                // UserDefaults writes are NOT signal-safe and could deadlock, so
+                // the dirty flag remains set. restoreIfNeeded() clears it on next
+                // launch, which is harmless (just an extra gamma restore).
                 CGDisplayRestoreColorSyncSettings()
-                UserDefaultsXDRDirtyFlagStore().isDirty = false
                 exit(0)
             }
             source.resume()

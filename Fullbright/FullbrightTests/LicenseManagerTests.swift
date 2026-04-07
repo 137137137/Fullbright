@@ -55,7 +55,7 @@ struct LicenseManagerTests {
         let (manager, storage, server) = makeManager()
         server.setActivation(.success)
         let result = await manager.activateLicense(licenseKey: "NEW-KEY")
-        #expect(result.success == true)
+        if case .failure = result { Issue.record("Expected .success") }
         let stored = storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData)
         #expect(stored?.licenseKey == "NEW-KEY")
     }
@@ -64,8 +64,11 @@ struct LicenseManagerTests {
         let (manager, storage, server) = makeManager()
         server.setActivation(.failure(message: "License already in use"))
         let result = await manager.activateLicense(licenseKey: "BAD-KEY")
-        #expect(result.success == false)
-        #expect(result.message == "License already in use")
+        if case .failure(let message) = result {
+            #expect(message == "License already in use")
+        } else {
+            Issue.record("Expected .failure")
+        }
         let stored = storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData)
         #expect(stored == nil)
     }

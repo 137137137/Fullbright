@@ -137,7 +137,7 @@ extension StubTrialManager: DebugTrialManaging {
 @MainActor
 final class StubLicenseManager: LicenseManaging {
     var nextCheckResult: AuthenticationState? = nil
-    var nextActivationResult: (success: Bool, message: String?) = (true, nil)
+    var nextActivationResult: LicenseActivationResult = .success
     var nextValidationResult: LicenseValidationResult = .valid
     private(set) var checkCallCount = 0
     private(set) var revokeCallCount = 0
@@ -165,7 +165,7 @@ final class StubLicenseManager: LicenseManaging {
         nextValidationResult
     }
 
-    func activateLicense(licenseKey: String) async -> (success: Bool, message: String?) {
+    func activateLicense(licenseKey: String) async -> LicenseActivationResult {
         nextActivationResult
     }
 

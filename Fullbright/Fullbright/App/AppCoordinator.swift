@@ -23,7 +23,7 @@ final class AppCoordinator {
     let settingsViewModel: SettingsViewModel
 
     private let keyManager: any BrightnessKeyManaging
-    private let osdController: XDRBrightnessOSDWindowController
+    private let osdController: any OSDShowing
     private let restoreGammaIfNeeded: @MainActor () -> Void
     private let authStateObserver: any AuthStateObserving
     private let osdEventRouter: any OSDEventRouting

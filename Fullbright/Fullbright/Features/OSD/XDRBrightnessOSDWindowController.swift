@@ -166,7 +166,7 @@ final class XDRBrightnessOSDWindow: NSPanel, NSWindowDelegate {
 // MARK: - OSD Window Controller
 
 @MainActor
-final class XDRBrightnessOSDWindowController {
+final class XDRBrightnessOSDWindowController: OSDShowing {
     private let xdrController: any XDRControlling
 
     init(xdrController: any XDRControlling) {
@@ -181,6 +181,12 @@ final class XDRBrightnessOSDWindowController {
 
     private let osdState = XDRBrightnessOSDState()
     private var window: XDRBrightnessOSDWindow?
+
+    /// No-arg entry point satisfying OSDShowing. Delegates to the
+    /// full `show(value:text:...)` overload with all defaults.
+    func show() {
+        show(value: nil)
+    }
 
     func show(
         value: Float? = nil,

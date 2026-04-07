@@ -25,6 +25,6 @@ protocol LicenseManaging: AnyObject {
     var events: AsyncStream<LicenseEvent> { get }
     func validateLicenseInBackground(licenseKey: String)
     func validateLicense(licenseKey: String) async -> LicenseValidationResult
-    func activateLicense(licenseKey: String) async -> (success: Bool, message: String?)
+    func activateLicense(licenseKey: String) async -> LicenseActivationResult
     func revokeLicense()
 }

@@ -38,6 +38,7 @@ enum StorageKey {
 enum AppURL {
     static let apiBase = Self.requireURL("https://fullbright.app/api")
     static let purchaseLicense = Self.requireURL("https://buy.stripe.com/eVqaEXdxH1tg4WcglYfEk00")
+    static let sparkleTesting = Self.requireURL("fullbright://sparkle-testing")
 
     /// Force-unwraps a URL string literal with a clear failure message.
     /// Only used for compile-time-known constants; any runtime URL

@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 extension AuthenticationState {
     /// Whether the current state permits XDR functionality.
@@ -24,5 +25,14 @@ extension AuthenticationState {
     var isAuthenticated: Bool {
         if case .authenticated = self { return true }
         return false
+    }
+
+    var trialStatusText: String? {
+        guard case .trial(let daysRemaining, _) = self else { return nil }
+        return "Trial: \(daysRemaining) days left"
+    }
+
+    var trialColor: Color {
+        isTrialUrgent ? .orange : .secondary
     }
 }

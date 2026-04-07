@@ -12,10 +12,10 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Trial
 
 @MainActor
 final class TrialManager: TrialManaging {
-    let storage: any SecureStorageProviding
+    fileprivate let storage: any SecureStorageProviding
     private let serverClient: any TrialServerClientProviding
     private let keychain: any KeychainProviding
-    let deviceIdentifier: any DeviceIdentifying
+    fileprivate let deviceIdentifier: any DeviceIdentifying
 
     static let trialDurationDays = 14
 
@@ -53,7 +53,11 @@ final class TrialManager: TrialManaging {
                   trialData.deviceId == deviceIdentifier.secureIdentifier else {
                 return .expired
             }
-            return calculateTrialState(from: trialData)
+            let state = calculateTrialState(from: trialData)
+            if case .trial = state, !trialData.confirmed {
+                confirmTrialWithServer(trialData: trialData)
+            }
+            return state
         } else {
             return .notAuthenticated
         }
@@ -66,10 +70,6 @@ final class TrialManager: TrialManaging {
         if daysRemaining > 0 {
             guard let expiryDate = Calendar.current.date(byAdding: .day, value: Self.trialDurationDays, to: trialData.startDate) else {
                 return .expired
-            }
-
-            if !trialData.confirmed {
-                confirmTrialWithServer(trialData: trialData)
             }
 
             return .trial(daysRemaining: daysRemaining, expiryDate: expiryDate)

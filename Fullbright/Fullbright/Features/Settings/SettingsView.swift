@@ -56,7 +56,7 @@ struct SettingsView: View {
 
                 case .trial(let daysRemaining, let expiryDate):
                     Text("Trial - \(daysRemaining) days remaining")
-                        .foregroundStyle(viewModel.authState.isTrialUrgent ? Color.orange : Color.primary)
+                        .foregroundStyle(viewModel.authState.trialColor)
                     Text("Expires \(expiryDate.formatted(date: .abbreviated, time: .omitted))")
                         .font(.caption)
                         .foregroundStyle(.secondary)

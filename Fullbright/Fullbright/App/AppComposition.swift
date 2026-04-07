@@ -26,7 +26,7 @@ struct AppDependencies {
     let xdrController: any XDRControlling
     let keyManager: any BrightnessKeyManaging
     let authManager: any AuthenticationManaging
-    let osdController: XDRBrightnessOSDWindowController
+    let osdController: any OSDShowing
     let authStateObserver: any AuthStateObserving
     let osdEventRouter: any OSDEventRouting
     let updaterController: SPUStandardUpdaterController
@@ -75,9 +75,6 @@ enum AppComposition {
         )
         let integrityMonitor = IntegrityMonitor(checker: integrityChecker)
         let authManager: any AuthenticationManaging = SecureAuthenticationManager(
-            storage: storage,
-            serverClient: authServerClient,
-            keychain: keychain,
             integrityChecker: integrityChecker,
             integrityMonitor: integrityMonitor,
             deviceIdentifier: deviceIdentifier,

@@ -85,6 +85,18 @@ struct MenuBarViewModelTests {
         #expect(xdr.enableCallCount == 0)
     }
 
+    @Test("setXDREnabled(false) disables XDR when currently enabled")
+    func setXDREnabled_false_disablesXDR() {
+        let xdr = StubXDRController()
+        xdr.isEnabled = true
+        let auth = StubAuthManager()
+        auth.authState = .authenticated(licenseKey: "K")
+        let (vm, _, _, _) = makeViewModel(xdr: xdr, auth: auth)
+
+        vm.setXDREnabled(false)
+        #expect(xdr.disableCallCount == 1)
+    }
+
     @Test("refreshAuthIfUnauthenticated refreshes only in notAuthenticated or expired states")
     func refreshAuth_onlyWhenUnauthenticated() {
         let auth = StubAuthManager()

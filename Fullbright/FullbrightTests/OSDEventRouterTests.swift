@@ -16,7 +16,7 @@ import Testing
 @Suite("OSDEventRouter")
 struct OSDEventRouterTests {
 
-    private func makeSetup() -> (OSDEventRouter, XDRController, StubBrightnessKeyManager, StubDisplayServices, StubGammaTableManager) {
+    private func makeSetup() -> (OSDEventRouter, XDRController, StubBrightnessKeyManager, StubOSDController) {
         let ds = StubDisplayServices()
         let gamma = StubGammaTableManager()
         let xdr = XDRController(
@@ -28,19 +28,15 @@ struct OSDEventRouterTests {
             dirtyFlagStore: StubXDRDirtyFlagStore(),
             supportsXDROverride: true
         )
-        // NOTE: OSDEventRouter takes a real XDRBrightnessOSDWindowController.
-        // Constructing one requires NSHostingView / NSPanel which is not
-        // test-friendly, so we skip asserting on the OSD side and focus
-        // on the brightness-adjust side via a direct router stub.
-        let osd = XDRBrightnessOSDWindowController(xdrController: xdr)
+        let osd = StubOSDController()
         let router = OSDEventRouter(xdrController: xdr, osdController: osd)
         let keyManager = StubBrightnessKeyManager()
-        return (router, xdr, keyManager, ds, gamma)
+        return (router, xdr, keyManager, osd)
     }
 
     @Test("attach installs a brightness-key callback on the key manager")
     func attach_installsCallback() {
-        let (router, _, keyManager, _, _) = makeSetup()
+        let (router, _, keyManager, _) = makeSetup()
         #expect(keyManager.onBrightnessKey == nil)
         router.attach(to: keyManager)
         #expect(keyManager.onBrightnessKey != nil)
@@ -48,7 +44,7 @@ struct OSDEventRouterTests {
 
     @Test("brightness-up key adjusts XDR brightness up by step value")
     func brightnessUp_increasesBrightness() {
-        let (router, xdr, keyManager, _, _) = makeSetup()
+        let (router, xdr, keyManager, osd) = makeSetup()
         _ = xdr.enableXDR()
         let before = xdr.brightness
 
@@ -56,11 +52,12 @@ struct OSDEventRouterTests {
         keyManager.onBrightnessKey?(true)  // isUp = true
 
         #expect(xdr.brightness > before)
+        #expect(osd.showCallCount == 1)
     }
 
     @Test("brightness-down key adjusts XDR brightness down by step value")
     func brightnessDown_decreasesBrightness() {
-        let (router, xdr, keyManager, _, _) = makeSetup()
+        let (router, xdr, keyManager, osd) = makeSetup()
         _ = xdr.enableXDR()
         // Raise brightness first so there's headroom to go down.
         xdr.adjustBrightness(delta: 0.5)
@@ -70,11 +67,12 @@ struct OSDEventRouterTests {
         keyManager.onBrightnessKey?(false)  // isUp = false
 
         #expect(xdr.brightness < before)
+        #expect(osd.showCallCount == 1)
     }
 
     @Test("detach clears the key manager callback")
     func detach_clearsCallback() {
-        let (router, _, keyManager, _, _) = makeSetup()
+        let (router, _, keyManager, _) = makeSetup()
         router.attach(to: keyManager)
         router.detach()
         #expect(keyManager.onBrightnessKey == nil)
@@ -82,7 +80,7 @@ struct OSDEventRouterTests {
 
     @Test("re-attaching to a different key manager detaches the previous one")
     func reattach_detachesPrevious() {
-        let (router, _, keyManagerA, _, _) = makeSetup()
+        let (router, _, keyManagerA, _) = makeSetup()
         let keyManagerB = StubBrightnessKeyManager()
 
         router.attach(to: keyManagerA)

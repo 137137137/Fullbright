@@ -21,7 +21,7 @@ private final class TestAuthManager: AuthenticationManaging {
     func start() async {}
     func refreshAuthenticationState() {}
     func startTrial() {}
-    func activateLicense(licenseKey: String) async -> (success: Bool, message: String?) { (false, nil) }
+    func activateLicense(licenseKey: String) async -> LicenseActivationResult { .failure(message: "") }
     func logout() {}
 }
 

@@ -28,11 +28,11 @@ protocol OSDEventRouting: AnyObject {
 @MainActor
 final class OSDEventRouter: OSDEventRouting {
     private let xdrController: any XDRControlling
-    private let osdController: XDRBrightnessOSDWindowController
+    private let osdController: any OSDShowing
     private weak var currentKeyManager: (any BrightnessKeyManaging)?
 
     init(xdrController: any XDRControlling,
-         osdController: XDRBrightnessOSDWindowController) {
+         osdController: any OSDShowing) {
         self.xdrController = xdrController
         self.osdController = osdController
     }

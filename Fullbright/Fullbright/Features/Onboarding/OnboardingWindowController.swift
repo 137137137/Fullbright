@@ -25,8 +25,6 @@ final class OnboardingWindowController: NSWindowController {
             window?.close()
         })
         window.contentView = contentView
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate()
     }
 
     required init?(coder: NSCoder) {

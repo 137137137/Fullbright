@@ -12,9 +12,9 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Licen
 
 @MainActor
 final class LicenseManager: LicenseManaging {
-    let storage: any SecureStorageProviding
+    fileprivate let storage: any SecureStorageProviding
     private let serverClient: any LicenseValidationClientProviding & LicenseActivationClientProviding
-    let deviceIdentifier: any DeviceIdentifying
+    fileprivate let deviceIdentifier: any DeviceIdentifying
 
     /// Single-subscriber event stream. The continuation is used to yield
     /// events from background tasks; `events` is exposed to the auth
@@ -101,7 +101,7 @@ final class LicenseManager: LicenseManaging {
 
     // MARK: - License Activation
 
-    func activateLicense(licenseKey: String) async -> (success: Bool, message: String?) {
+    func activateLicense(licenseKey: String) async -> LicenseActivationResult {
         let deviceId = deviceIdentifier.secureIdentifier
         let result = await serverClient.activateLicense(licenseKey: licenseKey, deviceId: deviceId)
 
@@ -116,11 +116,11 @@ final class LicenseManager: LicenseManaging {
                 try storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
             } catch {
                 logger.error("Failed to persist license data: \(error, privacy: .public)")
-                return (false, "License activated but failed to save locally. Please try again.")
+                return .failure(message: "License activated but failed to save locally. Please try again.")
             }
-            return (true, nil)
+            return .success
         case .failure(let message):
-            return (false, message)
+            return .failure(message: message)
         }
     }
 

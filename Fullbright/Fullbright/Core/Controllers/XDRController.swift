@@ -57,16 +57,6 @@ final class XDRController: XDRControlling {
         static let initialScaling: Float = 0.5
     }
 
-    // MARK: - Crash Recovery Entry Point
-
-    /// Called on launch. Delegates to a fresh `UserDefaultsXDRDirtyFlagStore`
-    /// so AppDelegate doesn't need to know about the store type. The store
-    /// itself lives in XDRDirtyFlagStore.swift.
-    @MainActor
-    static func restoreGammaIfNeeded() {
-        UserDefaultsXDRDirtyFlagStore().restoreIfNeeded()
-    }
-
     // MARK: - Observable State
 
     private(set) var isEnabled: Bool = false
@@ -103,18 +93,18 @@ final class XDRController: XDRControlling {
     private let supported: Bool
 
     init(displayID: UInt32 = CGMainDisplayID(),
-         displayServices: (any DisplayServicesProviding)? = nil,
-         nightShiftManager: (any NightShiftManaging)? = nil,
-         gammaManager: (any GammaTableManaging)? = nil,
-         displayConfigurator: (any DisplayConfiguring)? = nil,
-         dirtyFlagStore: (any XDRDirtyFlagStoring)? = nil,
+         displayServices: any DisplayServicesProviding,
+         nightShiftManager: any NightShiftManaging,
+         gammaManager: any GammaTableManaging,
+         displayConfigurator: any DisplayConfiguring,
+         dirtyFlagStore: any XDRDirtyFlagStoring,
          supportsXDROverride: Bool? = nil) {
         self.displayID = displayID
-        self.displayServices = displayServices ?? DisplayServicesClient()
-        self.nightShiftManager = nightShiftManager ?? NightShiftManager()
-        self.gammaManager = gammaManager ?? GammaTableManager()
-        self.displayConfigurator = displayConfigurator ?? SkyLightDisplayConfigurator()
-        self.dirtyFlagStore = dirtyFlagStore ?? UserDefaultsXDRDirtyFlagStore()
+        self.displayServices = displayServices
+        self.nightShiftManager = nightShiftManager
+        self.gammaManager = gammaManager
+        self.displayConfigurator = displayConfigurator
+        self.dirtyFlagStore = dirtyFlagStore
 
         if let override = supportsXDROverride {
             supported = override

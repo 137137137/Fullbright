@@ -37,8 +37,6 @@ struct HMACPayloadSigner: PayloadSigner {
     }
 
     func verify(_ data: Data, signature: Data) -> Bool {
-        let expected = HMAC<SHA256>.authenticationCode(for: data, using: key)
-        return HMAC<SHA256>.isValidAuthenticationCode(signature, authenticating: data, using: key)
-            || Data(expected) == signature
+        HMAC<SHA256>.isValidAuthenticationCode(signature, authenticating: data, using: key)
     }
 }

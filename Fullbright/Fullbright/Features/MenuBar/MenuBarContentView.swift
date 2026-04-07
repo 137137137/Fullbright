@@ -33,13 +33,13 @@ struct MenuBarContentView: View {
                     .id(viewModel.canUseXDR)
                 }
                 .padding(.horizontal, MenuBarStyle.horizontalPadding)
-                .padding(.vertical, 8)
+                .padding(.vertical, MenuBarStyle.xdrRowVerticalPadding)
             } else {
                 Text("No XDR Display Detected")
                     .font(MenuBarStyle.bodyFont)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, MenuBarStyle.horizontalPadding)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, MenuBarStyle.xdrRowVerticalPadding)
             }
 
             Divider()
@@ -61,10 +61,7 @@ struct MenuBarContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.plain)
-            .font(MenuBarStyle.bodyFont)
-            .padding(.horizontal, MenuBarStyle.horizontalPadding)
-            .padding(.vertical, MenuBarStyle.verticalPadding)
+            .menuBarRowStyle()
             .accessibilityLabel("Settings")
 
             #if DEBUG
@@ -73,9 +70,7 @@ struct MenuBarContentView: View {
             // Developer menu
             Menu("Developer") {
                 Button("Open Sparkle Testing...") {
-                    if let url = URL(string: "fullbright://sparkle-testing") {
-                        NSWorkspace.shared.open(url)
-                    }
+                    NSWorkspace.shared.open(AppURL.sparkleTesting)
                 }
                 Divider()
                 Button("Set Trial: 14 days") { viewModel.debugActions.setTrialDays(14) }
@@ -91,12 +86,9 @@ struct MenuBarContentView: View {
                 Divider()
                 Button("Print Debug Info") { viewModel.debugActions.printInfo() }
             }
-            .buttonStyle(.plain)
-            .font(MenuBarStyle.bodyFont)
+            .menuBarRowStyle()
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, MenuBarStyle.horizontalPadding)
-            .padding(.vertical, MenuBarStyle.verticalPadding)
             #endif
 
             Divider()
@@ -107,12 +99,9 @@ struct MenuBarContentView: View {
             Button("Quit Fullbright") {
                 viewModel.quitApp()
             }
-            .buttonStyle(.plain)
-            .font(MenuBarStyle.bodyFont)
-            .padding(.horizontal, MenuBarStyle.horizontalPadding)
-            .padding(.vertical, MenuBarStyle.verticalPadding)
+            .menuBarRowStyle()
         }
-        .frame(width: 220)
+        .frame(width: MenuBarStyle.popoverWidth)
         .onAppear {
             viewModel.refreshAuthIfUnauthenticated()
         }
@@ -123,16 +112,20 @@ struct MenuBarContentView: View {
     @ViewBuilder
     private var statusBannerContent: some View {
         switch viewModel.authState {
-        case .trial(let daysRemaining, _):
-            statusBanner(
-                text: "Trial: \(daysRemaining) days left",
-                color: viewModel.authState.isTrialUrgent ? .orange : .secondary
-            )
+        case .trial:
+            if let text = viewModel.authState.trialStatusText {
+                statusBanner(
+                    text: text,
+                    color: viewModel.authState.trialColor
+                )
+            }
             Divider()
         case .expired:
             statusBanner(text: "License Required", color: .red)
             Divider()
-        default:
+        case .authenticated:
+            EmptyView()
+        case .notAuthenticated:
             EmptyView()
         }
     }

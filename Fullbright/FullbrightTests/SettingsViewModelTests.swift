@@ -80,7 +80,7 @@ struct SettingsViewModelTests {
     @Test("activateLicense on success clears the license key field and sets the alert")
     func activateLicense_success() async {
         let auth = StubAuthManager()
-        auth.nextActivationResult = (true, nil)
+        auth.nextActivationResult = .success
         let (vm, _, _, _, _) = makeViewModel(auth: auth)
         vm.licenseKey = "SOME-KEY-123"
         await vm.activateLicense()
@@ -91,7 +91,7 @@ struct SettingsViewModelTests {
     @Test("activateLicense on failure keeps the license key and shows a failure alert")
     func activateLicense_failure() async {
         let auth = StubAuthManager()
-        auth.nextActivationResult = (false, "Invalid key")
+        auth.nextActivationResult = .failure(message: "Invalid key")
         let (vm, _, _, _, _) = makeViewModel(auth: auth)
         vm.licenseKey = "BAD-KEY"
         await vm.activateLicense()

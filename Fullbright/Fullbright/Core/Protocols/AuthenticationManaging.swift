@@ -19,7 +19,7 @@ protocol AuthenticationManaging: AnyObject {
 
     func refreshAuthenticationState()
     func startTrial()
-    func activateLicense(licenseKey: String) async -> (success: Bool, message: String?)
+    func activateLicense(licenseKey: String) async -> LicenseActivationResult
     func logout()
 }
 
