@@ -11,11 +11,6 @@ import CryptoKit
 extension Digest {
     /// Lowercase hex string representation of the digest bytes.
     var hexString: String {
-        var result = ""
-        result.reserveCapacity(Self.byteCount * 2)
-        for byte in self {
-            result.append(String(format: "%02x", byte))
-        }
-        return result
+        map { String(format: "%02x", $0) }.joined()
     }
 }

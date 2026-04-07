@@ -13,7 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            // `showSettingsWindow:` is the documented responder action for
+            // opening the Settings scene on macOS 13+. We look it up by
+            // string because the selector isn't exposed by any Swift type;
+            // the single-paren form is the standard spelling.
+            NSApp.sendAction(NSSelectorFromString("showSettingsWindow:"), to: nil, from: nil)
         }
         return true
     }

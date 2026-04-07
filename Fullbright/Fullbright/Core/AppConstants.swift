@@ -36,8 +36,18 @@ enum StorageKey {
 // MARK: - URLs
 
 enum AppURL {
-    static let apiBase = URL(string: "https://fullbright.app/api")!
-    static let purchaseLicense = URL(string: "https://buy.stripe.com/eVqaEXdxH1tg4WcglYfEk00")!
+    static let apiBase = Self.requireURL("https://fullbright.app/api")
+    static let purchaseLicense = Self.requireURL("https://buy.stripe.com/eVqaEXdxH1tg4WcglYfEk00")
+
+    /// Force-unwraps a URL string literal with a clear failure message.
+    /// Only used for compile-time-known constants; any runtime URL
+    /// parsing should use `URL(string:)` and handle nil explicitly.
+    private static func requireURL(_ string: String, file: StaticString = #file, line: UInt = #line) -> URL {
+        guard let url = URL(string: string) else {
+            fatalError("AppURL: failed to parse compile-time URL literal '\(string)'", file: file, line: line)
+        }
+        return url
+    }
 }
 
 // MARK: - Debug Constants
