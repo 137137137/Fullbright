@@ -130,9 +130,10 @@ final class LicenseManager: LicenseManaging {
         }
     }
 
-    // MARK: - Debug Helpers
+}
 
-    #if DEBUG
+#if DEBUG
+extension LicenseManager: DebugLicenseManaging {
     func debugLicenseInfo() -> String {
         if let licenseData = self.storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) {
             return """
@@ -152,5 +153,5 @@ final class LicenseManager: LicenseManaging {
         )
         try? storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
     }
-    #endif
 }
+#endif

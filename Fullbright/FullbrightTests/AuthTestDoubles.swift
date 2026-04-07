@@ -117,15 +117,17 @@ final class StubTrialManager: TrialManaging {
     func emitStateChange(_ state: AuthenticationState) {
         stateChangeHandler?(state)
     }
+}
 
-    #if DEBUG
+#if DEBUG
+extension StubTrialManager: DebugTrialManaging {
     func setTrialDaysRemaining(_ days: Int) -> AuthenticationState { nextCheckResult }
     func expireTrial() -> AuthenticationState { .expired }
     func resetTrial() {}
     var trialDuration: Int { 14 }
     func debugTrialInfo() -> String { "" }
-    #endif
 }
+#endif
 
 @MainActor
 final class StubLicenseManager: LicenseManaging {
@@ -165,9 +167,11 @@ final class StubLicenseManager: LicenseManaging {
     func emitStateChange(_ state: AuthenticationState) {
         stateChangeHandler?(state)
     }
+}
 
-    #if DEBUG
+#if DEBUG
+extension StubLicenseManager: DebugLicenseManaging {
     func debugLicenseInfo() -> String { "" }
     func setValidLicense() {}
-    #endif
 }
+#endif

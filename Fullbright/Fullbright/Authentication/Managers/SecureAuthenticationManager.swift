@@ -2,7 +2,11 @@
 //  SecureAuthenticationManager.swift
 //  Fullbright
 //
-//  Auth coordinator: trial, license, integrity monitoring, and state transitions.
+//  Slim auth coordinator. Composes trial + license managers, delegates
+//  state transitions to the pure AuthStateReducer, and delegates the
+//  integrity-monitoring loop to IntegrityMonitor. All logic that can be
+//  tested without I/O lives in the reducer; all logic that needs a Task
+//  lives in the monitor.
 //
 
 import Foundation
@@ -14,25 +18,33 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Auth"
 @Observable
 final class SecureAuthenticationManager: AuthenticationManaging {
 
-    private(set) var authState: AuthenticationState = .notAuthenticated
+    // Internal (default) so the DEBUG extension in
+    // SecureAuthenticationManager+Debug.swift can mutate state. Only
+    // accessed from within this module.
+    var authState: AuthenticationState = .notAuthenticated
 
-    private let trialManager: any TrialManaging
-    private let licenseManager: any LicenseManaging
+    // `internal` (rather than `private`) so the DEBUG extension in
+    // SecureAuthenticationManager+Debug.swift can reach them directly. The
+    // DEBUG extension lives in the same module and file-private would force
+    // everything into a single file. In production these are read-only.
+    let trialManager: any TrialManaging
+    let licenseManager: any LicenseManaging
     private let integrityChecker: any IntegrityChecking
-    private let storage: any SecureStorageProviding
-    private let deviceIdentifier: any DeviceIdentifying
+    private let integrityMonitor: any IntegrityMonitoring
 
-    @ObservationIgnored
-    private let integrityCheckTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    #if DEBUG
+    // Only used by `printDebugInfo`; not wired to any production logic.
+    let deviceIdentifier: any DeviceIdentifying
+    #endif
 
-    nonisolated deinit {
-        integrityCheckTaskLock.withLock { $0?.cancel() }
-    }
+    // Interval between background integrity + state re-validation ticks.
+    private static let monitoringInterval: Duration = .seconds(300)
 
     init(storage: (any SecureStorageProviding)? = nil,
          serverClient: (any AuthServerClientProviding)? = nil,
          keychain: (any KeychainProviding)? = nil,
          integrityChecker: (any IntegrityChecking)? = nil,
+         integrityMonitor: (any IntegrityMonitoring)? = nil,
          deviceIdentifier: (any DeviceIdentifying)? = nil,
          trialManager: (any TrialManaging)? = nil,
          licenseManager: (any LicenseManaging)? = nil) {
@@ -42,10 +54,14 @@ final class SecureAuthenticationManager: AuthenticationManaging {
         )
         let resolvedKeychain = keychain ?? KeychainManager.shared
         let resolvedDeviceIdentifier = deviceIdentifier ?? DeviceIdentifier.shared
+        let resolvedChecker = integrityChecker ?? IntegrityChecker.shared
 
-        self.storage = resolvedStorage
-        self.integrityChecker = integrityChecker ?? IntegrityChecker.shared
+        self.integrityChecker = resolvedChecker
+        self.integrityMonitor = integrityMonitor ?? IntegrityMonitor(checker: resolvedChecker)
+
+        #if DEBUG
         self.deviceIdentifier = resolvedDeviceIdentifier
+        #endif
 
         self.trialManager = trialManager ?? TrialManager(
             storage: resolvedStorage,
@@ -60,51 +76,57 @@ final class SecureAuthenticationManager: AuthenticationManaging {
             deviceIdentifier: resolvedDeviceIdentifier
         )
 
-        // Server responses route back through these callbacks.
-        self.trialManager.setOnStateChange { [weak self] state in
-            self?.authState = state
-        }
-        self.licenseManager.setOnStateChange { [weak self] state in
+        // Wire sub-manager state-change callbacks back through the reducer.
+        self.trialManager.setOnStateChange { [weak self] _ in
             guard let self else { return }
-            self.authState = state
-            if case .expired = state {
-                // License revoked — fall back to trial if one is still valid
-                self.authState = self.trialManager.checkTrialStatus()
-            }
+            self.authState = AuthStateReducer.reduce(
+                current: self.authState,
+                event: .trialDeniedByServer
+            )
+        }
+        self.licenseManager.setOnStateChange { [weak self] _ in
+            guard let self else { return }
+            self.authState = AuthStateReducer.reduce(
+                current: self.authState,
+                event: .licenseRevokedByServer(
+                    trialFallback: self.trialManager.checkTrialStatus()
+                )
+            )
         }
     }
 
     // MARK: - Lifecycle
 
-    /// Runs the initial check and starts monitoring. Kept out of `init` because
-    /// the background Task captures `self` — posting before init returns is dicey.
-    ///
-    /// Async because `integrityChecker.passesAllChecks` offloads the blocking
-    /// SecStaticCodeCheckValidity call to a detached task. Callers that can't
-    /// await (e.g. AppCoordinator.init) wrap the call in `Task { await ... }`.
+    /// Runs the initial integrity check and starts monitoring. Deferred out
+    /// of `init` because the integrity check is async and must not capture
+    /// a half-initialized self.
     func start() async {
-        if await !integrityChecker.passesAllChecks() {
-            authState = .expired
-        } else {
-            refreshAuthenticationState()
-        }
-        startIntegrityMonitoring()
-    }
+        let integrityPassed = await integrityChecker.passesAllChecks()
+        let licenseState = licenseManager.checkLicense()
+        let trialState = trialManager.checkTrialStatus()
 
-    // MARK: - Integrity Monitoring
+        authState = AuthStateReducer.reduce(
+            current: authState,
+            event: .startup(
+                integrityPassed: integrityPassed,
+                licenseState: licenseState,
+                trialState: trialState
+            )
+        )
 
-    private func startIntegrityMonitoring() {
-        let task = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(300))
-                guard !Task.isCancelled, let self else { return }
-                if await !self.integrityChecker.passesAllChecks() {
-                    self.authState = .expired
-                }
-                await self.validateCurrentState()
-            }
+        // Kick off background license re-validation if we're currently authenticated.
+        if case let .authenticated(licenseKey) = authState {
+            licenseManager.validateLicenseInBackground(licenseKey: licenseKey)
         }
-        integrityCheckTaskLock.withLock { $0 = task }
+
+        integrityMonitor.start(interval: Self.monitoringInterval) { [weak self] in
+            guard let self else { return }
+            self.authState = AuthStateReducer.reduce(
+                current: self.authState,
+                event: .integrityMonitorFailed
+            )
+            await self.validateCurrentState()
+        }
     }
 
     // MARK: - Authentication Status
@@ -112,8 +134,6 @@ final class SecureAuthenticationManager: AuthenticationManaging {
     func refreshAuthenticationState() {
         if let licenseState = licenseManager.checkLicense() {
             authState = licenseState
-
-            // Validate with server in background
             if case .authenticated(let licenseKey) = licenseState {
                 licenseManager.validateLicenseInBackground(licenseKey: licenseKey)
             }
@@ -133,7 +153,10 @@ final class SecureAuthenticationManager: AuthenticationManaging {
     func activateLicense(licenseKey: String) async -> (success: Bool, message: String?) {
         let result = await licenseManager.activateLicense(licenseKey: licenseKey)
         if result.success {
-            authState = .authenticated(licenseKey: licenseKey)
+            authState = AuthStateReducer.reduce(
+                current: authState,
+                event: .licenseActivatedLocally(licenseKey: licenseKey)
+            )
         }
         return result
     }
@@ -147,7 +170,10 @@ final class SecureAuthenticationManager: AuthenticationManaging {
             // Offline grace: `.offline` and `.valid` both stay authenticated.
             // Only an explicit `.invalid` (server revoked the license) expires it.
             if case .invalid = result {
-                authState = .expired
+                authState = AuthStateReducer.reduce(
+                    current: authState,
+                    event: .licenseRevokedByServer(trialFallback: trialManager.checkTrialStatus())
+                )
             }
         case .trial:
             authState = trialManager.checkTrialStatus()
@@ -160,50 +186,6 @@ final class SecureAuthenticationManager: AuthenticationManaging {
 
     func logout() {
         licenseManager.revokeLicense()
-        authState = .expired
+        authState = AuthStateReducer.reduce(current: authState, event: .loggedOut)
     }
-
-    // MARK: - Developer Testing (DEBUG only)
-
-    #if DEBUG
-    func setTrialDaysRemaining(_ days: Int) {
-        authState = trialManager.setTrialDaysRemaining(days)
-        logger.debug("Trial set to \(days, privacy: .public) days remaining")
-    }
-
-    func resetTrial() {
-        trialManager.resetTrial()
-        licenseManager.revokeLicense()
-        authState = .notAuthenticated
-        refreshAuthenticationState()
-        logger.debug("Trial reset - app will behave as first launch")
-    }
-
-    func expireTrial() {
-        authState = trialManager.expireTrial()
-        logger.debug("Trial expired")
-    }
-
-    func setValidLicense() {
-        licenseManager.setValidLicense()
-        authState = .authenticated(licenseKey: DebugConstants.testLicenseKey)
-        logger.debug("Test license activated")
-    }
-
-    func printDebugInfo() {
-        let deviceId = deviceIdentifier.secureIdentifier
-        logger.debug("=== Authentication Debug Info ===")
-        logger.debug("Current State: \(String(describing: self.authState), privacy: .public)")
-        logger.debug("Device ID: \(deviceId)")
-        logger.debug("\(self.trialManager.debugTrialInfo())")
-        logger.debug("\(self.licenseManager.debugLicenseInfo())")
-        logger.debug("================================")
-    }
-    #endif
 }
-
-// MARK: - DebugAuthManaging Conformance
-
-#if DEBUG
-extension SecureAuthenticationManager: DebugAuthManaging {}
-#endif

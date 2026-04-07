@@ -141,9 +141,10 @@ final class TrialManager: TrialManaging {
         }
     }
 
-    // MARK: - Debug Helpers
+}
 
-    #if DEBUG
+#if DEBUG
+extension TrialManager: DebugTrialManaging {
     func setTrialDaysRemaining(_ days: Int) -> AuthenticationState {
         guard let startDate = Calendar.current.date(byAdding: .day, value: -(Self.trialDurationDays - days), to: Date()) else {
             return .expired
@@ -180,5 +181,5 @@ final class TrialManager: TrialManaging {
         }
         return "No trial data"
     }
-    #endif
 }
+#endif

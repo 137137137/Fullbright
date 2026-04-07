@@ -5,6 +5,9 @@
 
 import Foundation
 
+/// Core license lifecycle protocol. DEBUG helpers live in the separate
+/// `DebugLicenseManaging` protocol (see SecureAuthenticationManager+Debug.swift)
+/// so production conformers aren't forced to implement test affordances.
 @MainActor
 protocol LicenseManaging: AnyObject {
     func checkLicense() -> AuthenticationState?
@@ -13,9 +16,4 @@ protocol LicenseManaging: AnyObject {
     func validateLicense(licenseKey: String) async -> LicenseValidationResult
     func activateLicense(licenseKey: String) async -> (success: Bool, message: String?)
     func revokeLicense()
-
-    #if DEBUG
-    func debugLicenseInfo() -> String
-    func setValidLicense()
-    #endif
 }
