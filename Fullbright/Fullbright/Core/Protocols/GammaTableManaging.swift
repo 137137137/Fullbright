@@ -17,6 +17,6 @@ protocol GammaTableManaging {
     func applyScaledGamma(displayID: UInt32, softwareBrightness: Float?)
     func startSmoothTransition(to target: Float, displayID: UInt32)
     func updateBrightness(from unifiedBrightness: Float)
-    func stopTimer()
+    func stopRenderLoop()
     func resetLogging()
 }

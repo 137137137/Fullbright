@@ -200,7 +200,7 @@ final class XDRController: XDRControlling {
         // Stop gamma reapply
         rampTask?.cancel()
         rampTask = nil
-        gammaManager.stopTimer()
+        gammaManager.stopRenderLoop()
 
         // Step 1: Restore gamma
         CGDisplayRestoreColorSyncSettings()

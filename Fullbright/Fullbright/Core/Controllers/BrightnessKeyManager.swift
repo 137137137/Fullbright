@@ -18,7 +18,7 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Brigh
 final class BrightnessKeyManager: BrightnessKeyManaging {
     static let shared = BrightnessKeyManager()
 
-    // MARK: - Media Key Constants (IOKit NX_* values)
+    // MARK: - Constants
 
     private enum MediaKey {
         /// NX_SYSDEFINED event type
@@ -39,47 +39,51 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         static let brightnessDown: Int = 3
     }
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    /// Step size for brightness adjustment (1/32 of full range — 16 SDR steps + 16 XDR steps).
+    /// Held statically so the C event-tap callback can read it without touching `.shared`.
+    static let brightnessStepValue: Float = 1.0 / 32.0
 
-    /// Thread-safe flag for the C callback to check synchronously.
-    /// When true, brightness key events are swallowed (native OSD suppressed).
-    /// Protected by OSAllocatedUnfairLock because the C event tap callback reads
-    /// this off the main actor while @MainActor methods write it.
-    static let interceptingLock = OSAllocatedUnfairLock(initialState: false)
+    // MARK: - Static lock-protected state (visible to the C callback)
+    //
+    // The CGEventTap callback is a C function that runs off the main actor on
+    // an event-tap thread. It must read state without taking actor isolation,
+    // so we expose two pieces of static, lock-protected state:
+    //   - `interceptingState`: whether to swallow brightness key events
+    //   - `keyHandlerState`:   the @MainActor handler to invoke on key down
+    //
+    // OSAllocatedUnfairLock makes both reads/writes thread-safe.
 
-    static var intercepting: Bool {
-        get { interceptingLock.withLock { $0 } }
-        set { interceptingLock.withLock { $0 = newValue } }
+    private static let interceptingState = OSAllocatedUnfairLock(initialState: false)
+    private static let keyHandlerState = OSAllocatedUnfairLock<BrightnessKeyHandler?>(initialState: nil)
+
+    private static var isIntercepting: Bool {
+        get { interceptingState.withLock { $0 } }
+        set { interceptingState.withLock { $0 = newValue } }
     }
 
-    /// Lock-protected closure for the C callback to invoke brightness adjustments
-    /// without directly referencing XDRController.shared. Set by AppCoordinator at start().
-    static let adjustBrightnessLock = OSAllocatedUnfairLock<((Float) -> Void)?>(initialState: nil)
-
-    static var adjustBrightnessAction: ((Float) -> Void)? {
-        get { adjustBrightnessLock.withLock { $0 } }
-        set { adjustBrightnessLock.withLock { $0 = newValue } }
+    private static var currentKeyHandler: BrightnessKeyHandler? {
+        get { keyHandlerState.withLock { $0 } }
+        set { keyHandlerState.withLock { $0 = newValue } }
     }
 
-    /// Step size for brightness adjustment (1/32 of full range — 16 SDR steps + 16 XDR steps)
-    private let brightnessStep: Float = 1.0 / 32.0
+    // MARK: - Protocol-conforming instance properties
 
-    // MARK: - Protocol-conforming instance wrappers for static lock-protected state.
-    // The C event tap callback requires static access; these provide protocol-based DI.
+    var brightnessStep: Float { Self.brightnessStepValue }
 
     var intercepting: Bool {
-        get { Self.intercepting }
-        set { Self.intercepting = newValue }
+        get { Self.isIntercepting }
+        set { Self.isIntercepting = newValue }
     }
 
-    var adjustBrightnessAction: ((Float) -> Void)? {
-        get { Self.adjustBrightnessAction }
-        set { Self.adjustBrightnessAction = newValue }
+    var onBrightnessKey: BrightnessKeyHandler? {
+        get { Self.currentKeyHandler }
+        set { Self.currentKeyHandler = newValue }
     }
 
-    /// Callback for when brightness changes (to show OSD)
-    var onBrightnessChange: (() -> Void)?
+    // MARK: - Event Tap
+
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
 
     func start() {
         guard eventTap == nil else { return }
@@ -93,7 +97,7 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         }
         logger.info("Accessibility granted")
 
-        // Create the event tap on a background thread (CGEventTap callback is C-convention)
+        // Create the event tap. The callback is a C function and runs off the main actor.
         let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << MediaKey.sysDefinedEventType)
 
         let tap = CGEvent.tapCreate(
@@ -101,13 +105,13 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: mask,
-            callback: { proxy, type, event, userInfo in
-                return BrightnessKeyManager.handleEvent(proxy: proxy, type: type, event: event)
+            callback: { _, type, event, _ in
+                BrightnessKeyManager.handleEvent(type: type, event: event)
             },
             userInfo: nil
         )
 
-        guard let tap = tap else {
+        guard let tap else {
             logger.error("Failed to create event tap — accessibility permissions needed")
             return
         }
@@ -133,23 +137,18 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         logger.info("Event tap stopped")
     }
 
-    // MARK: - Event Handling (C callback, not on MainActor)
+    // MARK: - Event Handling (C callback context — NOT on MainActor)
 
+    /// Returning `nil` swallows the event; returning `Unmanaged.passRetained(event)`
+    /// passes it through to the system.
     private static func handleEvent(
-        proxy: CGEventTapProxy,
         type: CGEventType,
         event: CGEvent
     ) -> Unmanaged<CGEvent>? {
-        // Handle NX_SYSDEFINED events (media keys)
-        guard type.rawValue == MediaKey.sysDefinedEventType else {
-            return Unmanaged.passRetained(event)
-        }
-
-        guard let nsEvent = NSEvent(cgEvent: event) else {
-            return Unmanaged.passRetained(event)
-        }
-
-        guard nsEvent.subtype.rawValue == MediaKey.mediaKeySubtype else {
+        // Only handle NX_SYSDEFINED events (media keys)
+        guard type.rawValue == MediaKey.sysDefinedEventType,
+              let nsEvent = NSEvent(cgEvent: event),
+              nsEvent.subtype.rawValue == MediaKey.mediaKeySubtype else {
             return Unmanaged.passRetained(event)
         }
 
@@ -162,30 +161,26 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
             return Unmanaged.passRetained(event)
         }
 
-        logger.debug("Brightness key detected: keyCode=\(keyCode, privacy: .public), isKeyDown=\(isKeyDown, privacy: .public), intercepting=\(BrightnessKeyManager.intercepting, privacy: .public)")
+        let intercepting = isIntercepting
+        logger.debug("Brightness key: keyCode=\(keyCode, privacy: .public) isKeyDown=\(isKeyDown, privacy: .public) intercepting=\(intercepting, privacy: .public)")
 
-        guard isKeyDown else {
-            // Swallow key-up events too when intercepting to prevent native OSD
-            return BrightnessKeyManager.intercepting ? nil : Unmanaged.passRetained(event)
-        }
-
-        guard BrightnessKeyManager.intercepting else {
-            logger.debug("NOT intercepting — passing event to system")
+        guard intercepting else {
             return Unmanaged.passRetained(event)
         }
 
-        let isBrightnessUp = keyCode == MediaKey.brightnessUp
+        // Swallow key-up events too while intercepting (prevents native OSD)
+        guard isKeyDown else { return nil }
 
-        DispatchQueue.main.async {
-            MainActor.assumeIsolated {
-                let manager = BrightnessKeyManager.shared
-                let delta: Float = isBrightnessUp ? manager.brightnessStep : -manager.brightnessStep
-                BrightnessKeyManager.adjustBrightnessAction?(delta)
-                manager.onBrightnessChange?()
+        // Snapshot the handler under the lock and dispatch to the main actor.
+        // The @Sendable @MainActor signature lets us cross threads safely.
+        let isUp = keyCode == MediaKey.brightnessUp
+        if let handler = currentKeyHandler {
+            Task { @MainActor in
+                handler(isUp)
             }
         }
 
-        // Always swallow the event to suppress native macOS OSD
+        // Always swallow brightness key events to suppress native macOS OSD
         return nil
     }
 }

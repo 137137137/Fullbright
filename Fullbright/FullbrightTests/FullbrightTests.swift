@@ -2,16 +2,14 @@
 //  FullbrightTests.swift
 //  FullbrightTests
 //
-//  Created by Andrei on 9/3/25.
+//  Top-level test file. Real tests live in:
+//  - BrightnessNitsConverterTests.swift
+//  - AuthenticationStateTests.swift
+//  - SecureDataChecksumTests.swift
+//  - GammaTableManagerTests.swift
+//  - TrialManagerTests.swift
+//  - LicenseManagerTests.swift
+//  - SecureAuthenticationManagerTests.swift
 //
-
-import Testing
-@testable import Fullbright
-
-struct FullbrightTests {
-
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-    }
-
-}
+//  Shared test doubles live in AuthTestDoubles.swift.
+//

@@ -42,7 +42,9 @@ final class GammaTableManager: GammaTableManaging {
     private var appliedBrightness: Float = 0.0
     private var hasLoggedScaling = false
 
-    private var gammaTimer: Timer?
+    /// Render loop driven by a Task instead of a Timer so the body runs
+    /// inside MainActor isolation directly (no `assumeIsolated` shim).
+    @ObservationIgnored private var renderTask: Task<Void, Never>?
 
     // MARK: - Read Default Gamma
 
@@ -116,31 +118,36 @@ final class GammaTableManager: GammaTableManaging {
         targetBrightness = target
         appliedBrightness = target
         applyScaledGamma(displayID: displayID, softwareBrightness: appliedBrightness)
-        startReapplyTimer(displayID: displayID)
+        startRenderLoop(displayID: displayID)
     }
 
-    private func startReapplyTimer(displayID: UInt32) {
-        gammaTimer?.invalidate()
-        let timer = Timer(timeInterval: Constants.timerInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let target = self.targetBrightness
-                let current = self.appliedBrightness
-                if abs(target - current) > Constants.lerpThreshold {
-                    self.appliedBrightness = current + (target - current) * Constants.lerpFactor
-                } else {
-                    self.appliedBrightness = target
-                }
-                self.applyScaledGamma(displayID: displayID, softwareBrightness: self.appliedBrightness)
+    /// Drives a ~60Hz lerp toward `targetBrightness`, applying gamma every tick.
+    /// Uses a Task on the main actor so the body is fully MainActor-isolated.
+    private func startRenderLoop(displayID: UInt32) {
+        renderTask?.cancel()
+        renderTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Constants.timerInterval))
+                guard !Task.isCancelled, let self else { return }
+                self.tickRenderLoop(displayID: displayID)
             }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        gammaTimer = timer
     }
 
-    func stopTimer() {
-        gammaTimer?.invalidate()
-        gammaTimer = nil
+    private func tickRenderLoop(displayID: UInt32) {
+        let target = targetBrightness
+        let current = appliedBrightness
+        if abs(target - current) > Constants.lerpThreshold {
+            appliedBrightness = current + (target - current) * Constants.lerpFactor
+        } else {
+            appliedBrightness = target
+        }
+        applyScaledGamma(displayID: displayID, softwareBrightness: appliedBrightness)
+    }
+
+    func stopRenderLoop() {
+        renderTask?.cancel()
+        renderTask = nil
     }
 
     func resetLogging() {

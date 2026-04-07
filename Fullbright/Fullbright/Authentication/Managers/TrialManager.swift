@@ -11,7 +11,7 @@ import os
 private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Trial")
 
 @MainActor
-final class TrialManager {
+final class TrialManager: TrialManaging {
     private let storage: any SecureStorageProviding
     private let serverClient: any TrialServerClientProviding
     private let keychain: any KeychainProviding

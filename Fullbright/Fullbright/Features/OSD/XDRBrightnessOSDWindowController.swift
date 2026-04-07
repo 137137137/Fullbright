@@ -113,10 +113,14 @@ final class XDRBrightnessOSDWindow: NSPanel, NSWindowDelegate {
             guard !Task.isCancelled else { return }
             self.contentView?.superview?.alphaValue = 0
 
-            // Close after a small margin
+            // Hide after a small margin. Use orderOut() rather than close() so the
+            // window object stays valid for reuse — close() with isReleasedWhenClosed=false
+            // leaves a "closed" window object that doesn't replay correctly on next show.
             try? await Task.sleep(for: .milliseconds(100))
             guard !Task.isCancelled else { return }
-            self.close()
+            self.ignoresMouseEvents = false
+            self.orderOut(nil)
+            self.removeHoverTrackingArea()
         }
     }
 

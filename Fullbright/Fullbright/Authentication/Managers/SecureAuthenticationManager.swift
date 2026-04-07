@@ -13,16 +13,16 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Auth"
 @MainActor
 @Observable
 final class SecureAuthenticationManager: AuthenticationManaging {
-    static let shared = SecureAuthenticationManager()
 
     private(set) var authState: AuthenticationState = .notAuthenticated
 
-    private let trialManager: TrialManager
-    private let licenseManager: LicenseManager
+    private let trialManager: any TrialManaging
+    private let licenseManager: any LicenseManaging
     private let integrityChecker: any IntegrityChecking
     private let storage: any SecureStorageProviding
     private let deviceIdentifier: any DeviceIdentifying
 
+    @ObservationIgnored
     private let integrityCheckTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
 
     nonisolated deinit {
@@ -33,9 +33,13 @@ final class SecureAuthenticationManager: AuthenticationManaging {
          serverClient: (any AuthServerClientProviding)? = nil,
          keychain: (any KeychainProviding)? = nil,
          integrityChecker: (any IntegrityChecking)? = nil,
-         deviceIdentifier: (any DeviceIdentifying)? = nil) {
+         deviceIdentifier: (any DeviceIdentifying)? = nil,
+         trialManager: (any TrialManaging)? = nil,
+         licenseManager: (any LicenseManaging)? = nil) {
         let resolvedStorage = storage ?? SecureFileStorage.shared
-        let resolvedServerClient = serverClient ?? AuthServerClient()
+        let resolvedServerClient = serverClient ?? AuthServerClient(
+            session: CertificatePinningManager.shared.createPinnedURLSession()
+        )
         let resolvedKeychain = keychain ?? KeychainManager.shared
         let resolvedDeviceIdentifier = deviceIdentifier ?? DeviceIdentifier.shared
 
@@ -43,20 +47,22 @@ final class SecureAuthenticationManager: AuthenticationManaging {
         self.integrityChecker = integrityChecker ?? IntegrityChecker.shared
         self.deviceIdentifier = resolvedDeviceIdentifier
 
-        self.trialManager = TrialManager(
+        self.trialManager = trialManager ?? TrialManager(
             storage: resolvedStorage,
             serverClient: resolvedServerClient,
             keychain: resolvedKeychain,
             deviceIdentifier: resolvedDeviceIdentifier
         )
 
-        self.licenseManager = LicenseManager(
+        self.licenseManager = licenseManager ?? LicenseManager(
             storage: resolvedStorage,
             serverClient: resolvedServerClient,
             deviceIdentifier: resolvedDeviceIdentifier
         )
 
-        // Wire callbacks for async state changes from server responses
+        // Wire callbacks for async state changes from server responses.
+        // Safe to do here because the closures only fire on later main-actor turns,
+        // never synchronously during init.
         self.trialManager.setOnStateChange { [weak self] state in
             self?.authState = state
         }
@@ -64,12 +70,19 @@ final class SecureAuthenticationManager: AuthenticationManaging {
             guard let self else { return }
             self.authState = state
             if case .expired = state {
-                // License was revoked — fall through to trial check
+                // License revoked — fall through to trial check
                 self.authState = self.trialManager.checkTrialStatus()
             }
         }
+    }
 
-        if !self.integrityChecker.passesAllChecks() {
+    // MARK: - Lifecycle
+
+    /// Performs the initial authentication check and starts background monitoring.
+    /// Called by the composition root after construction. Must not be invoked from `init`,
+    /// because the launched Task captures `self` and would otherwise post before init completes.
+    func start() {
+        if !integrityChecker.passesAllChecks() {
             authState = .expired
         } else {
             refreshAuthenticationState()
@@ -130,6 +143,10 @@ final class SecureAuthenticationManager: AuthenticationManaging {
         switch authState {
         case .authenticated(let licenseKey):
             let result = await licenseManager.validateLicense(licenseKey: licenseKey)
+            // Note: `.offline` and `.valid` both leave the state authenticated.
+            // This is the offline-grace policy: a temporarily-unreachable server
+            // must not lock out a paying user. Only an explicit `.invalid` from
+            // the server (license revoked) transitions to `.expired`.
             if case .invalid = result {
                 authState = .expired
             }

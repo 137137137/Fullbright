@@ -11,7 +11,7 @@ import os
 private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "License")
 
 @MainActor
-final class LicenseManager {
+final class LicenseManager: LicenseManaging {
     private let storage: any SecureStorageProviding
     private let serverClient: any LicenseValidationClientProviding & LicenseActivationClientProviding
     private let deviceIdentifier: any DeviceIdentifying

@@ -11,6 +11,10 @@ import Foundation
 protocol AuthenticationManaging: AnyObject {
     var authState: AuthenticationState { get }
 
+    /// Performs the initial authentication check and starts background monitoring.
+    /// Must be called once after construction by the composition root.
+    func start()
+
     func refreshAuthenticationState()
     func startTrial()
     func activateLicense(licenseKey: String) async -> (success: Bool, message: String?)

@@ -23,6 +23,8 @@ final class AppCoordinator {
     private let keyManager: any BrightnessKeyManaging
     private let osdController: XDRBrightnessOSDWindowController
     private let restoreGammaIfNeeded: @Sendable () -> Void
+
+    @ObservationIgnored
     private let authObservationTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
 
     init(xdrController: (any XDRControlling)? = nil,
@@ -30,8 +32,20 @@ final class AppCoordinator {
          keyManager: (any BrightnessKeyManaging)? = nil,
          restoreGammaIfNeeded: (@Sendable () -> Void)? = nil) {
         let xdr = xdrController ?? XDRController.shared
-        let auth = authManager ?? SecureAuthenticationManager.shared
         let km = keyManager ?? BrightnessKeyManager.shared
+
+        // Build the auth stack explicitly so the composition root owns the
+        // singleton wiring (TLS pinning, default storage, etc.) rather than
+        // letting AuthServerClient.init reach into singletons by itself.
+        let auth: any AuthenticationManaging
+        if let injected = authManager {
+            auth = injected
+        } else {
+            let pinnedSession = CertificatePinningManager.shared.createPinnedURLSession()
+            let serverClient = AuthServerClient(session: pinnedSession)
+            auth = SecureAuthenticationManager(serverClient: serverClient)
+        }
+
         let updater = SPUStandardUpdaterController(
             startingUpdater: true,
             updaterDelegate: nil,
@@ -46,6 +60,10 @@ final class AppCoordinator {
         self.updaterController = updater
         self.menuBarViewModel = MenuBarViewModel(xdrController: xdr, authManager: auth, updaterController: updater)
         self.settingsViewModel = SettingsViewModel(authManager: auth, updaterController: updater)
+
+        // Auth manager kicks off its initial check + background monitoring here,
+        // not from inside its own init (which would post a Task before init returns).
+        auth.start()
 
         configureBrightnessKeyManager()
         syncXDRState()
@@ -79,11 +97,13 @@ final class AppCoordinator {
     // MARK: - Brightness Key Manager Setup
 
     private func configureBrightnessKeyManager() {
-        keyManager.adjustBrightnessAction = { [weak self] delta in
-            self?.xdrController.adjustBrightness(delta: delta)
-        }
-        keyManager.onBrightnessChange = { [weak self] in
-            self?.osdController.show()
+        // Capture the step at wiring time so the C event-tap callback never has
+        // to reach back into the manager singleton to read it.
+        let step = keyManager.brightnessStep
+        keyManager.onBrightnessKey = { [weak self] isUp in
+            guard let self else { return }
+            self.xdrController.adjustBrightness(delta: isUp ? step : -step)
+            self.osdController.show()
         }
     }
 
@@ -110,6 +130,11 @@ final class AppCoordinator {
 
     // MARK: - Auth State Observation
 
+    /// Bridges `@Observable` auth state into a long-lived task that calls `syncXDRState()`
+    /// on every distinct transition. This is the canonical pattern for observing
+    /// `@Observable` properties imperatively (Apple docs / WWDC23 "Discover Observation").
+    /// `withObservationTracking`'s `onChange` is edge-triggered (fires once per
+    /// observation cycle), so this is not a polling loop.
     private static func createAuthObservationTask(coordinator: AppCoordinator) -> Task<Void, Never> {
         var lastState = coordinator.authManager.authState
         return Task { @MainActor [weak coordinator] in
