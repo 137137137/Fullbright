@@ -45,7 +45,7 @@ struct MenuBarContentView: View {
             Divider()
 
             // Check for Updates
-            CheckForUpdatesView(updater: viewModel.updaterController.updater)
+            CheckForUpdatesView(viewModel: CheckForUpdatesViewModel(updater: viewModel.updaterController.updater))
 
             Divider()
 
