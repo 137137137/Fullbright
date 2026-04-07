@@ -40,59 +40,55 @@ final class SecureAuthenticationManager: AuthenticationManaging {
     // Interval between background integrity + state re-validation ticks.
     private static let monitoringInterval: Duration = .seconds(300)
 
-    init(storage: (any SecureStorageProviding)? = nil,
-         serverClient: (any AuthServerClientProviding)? = nil,
-         keychain: (any KeychainProviding)? = nil,
-         integrityChecker: (any IntegrityChecking)? = nil,
+    @ObservationIgnored
+    private let integrityCheckTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+
+    /// Tasks observing `licenseManager.events` and `trialManager.events`.
+    /// Wrapped in a lock so `nonisolated deinit` can cancel them safely.
+    @ObservationIgnored
+    private let eventObserverTasksLock = OSAllocatedUnfairLock<[Task<Void, Never>]>(initialState: [])
+
+    nonisolated deinit {
+        integrityCheckTaskLock.withLock { $0?.cancel() }
+        eventObserverTasksLock.withLock { tasks in
+            for task in tasks { task.cancel() }
+            tasks = []
+        }
+    }
+
+    /// All dependencies are required — no `.shared` defaults. Production
+    /// wiring lives in `AppComposition.makeDependencies`; tests wire up
+    /// their own doubles. The sub-manager parameters are optional only so
+    /// tests can either pass pre-built `StubTrialManager`/`StubLicenseManager`
+    /// instances OR let the initializer build the real implementations
+    /// against injected storage/network/keychain doubles.
+    init(storage: any SecureStorageProviding,
+         serverClient: any AuthServerClientProviding,
+         keychain: any KeychainProviding,
+         integrityChecker: any IntegrityChecking,
          integrityMonitor: (any IntegrityMonitoring)? = nil,
-         deviceIdentifier: (any DeviceIdentifying)? = nil,
+         deviceIdentifier: any DeviceIdentifying,
          trialManager: (any TrialManaging)? = nil,
          licenseManager: (any LicenseManaging)? = nil) {
-        let resolvedStorage = storage ?? SecureFileStorage.shared
-        let resolvedServerClient = serverClient ?? AuthServerClient(
-            session: CertificatePinningManager.shared.createPinnedURLSession()
-        )
-        let resolvedKeychain = keychain ?? KeychainManager.shared
-        let resolvedDeviceIdentifier = deviceIdentifier ?? DeviceIdentifier.shared
-        let resolvedChecker = integrityChecker ?? IntegrityChecker.shared
-
-        self.integrityChecker = resolvedChecker
-        self.integrityMonitor = integrityMonitor ?? IntegrityMonitor(checker: resolvedChecker)
+        self.integrityChecker = integrityChecker
+        self.integrityMonitor = integrityMonitor ?? IntegrityMonitor(checker: integrityChecker)
 
         #if DEBUG
-        self.deviceIdentifier = resolvedDeviceIdentifier
+        self.deviceIdentifier = deviceIdentifier
         #endif
 
         self.trialManager = trialManager ?? TrialManager(
-            storage: resolvedStorage,
-            serverClient: resolvedServerClient,
-            keychain: resolvedKeychain,
-            deviceIdentifier: resolvedDeviceIdentifier
+            storage: storage,
+            serverClient: serverClient,
+            keychain: keychain,
+            deviceIdentifier: deviceIdentifier
         )
 
         self.licenseManager = licenseManager ?? LicenseManager(
-            storage: resolvedStorage,
-            serverClient: resolvedServerClient,
-            deviceIdentifier: resolvedDeviceIdentifier
+            storage: storage,
+            serverClient: serverClient,
+            deviceIdentifier: deviceIdentifier
         )
-
-        // Wire sub-manager state-change callbacks back through the reducer.
-        self.trialManager.setOnStateChange { [weak self] _ in
-            guard let self else { return }
-            self.authState = AuthStateReducer.reduce(
-                current: self.authState,
-                event: .trialDeniedByServer
-            )
-        }
-        self.licenseManager.setOnStateChange { [weak self] _ in
-            guard let self else { return }
-            self.authState = AuthStateReducer.reduce(
-                current: self.authState,
-                event: .licenseRevokedByServer(
-                    trialFallback: self.trialManager.checkTrialStatus()
-                )
-            )
-        }
     }
 
     // MARK: - Lifecycle
@@ -126,6 +122,49 @@ final class SecureAuthenticationManager: AuthenticationManaging {
                 event: .integrityMonitorFailed
             )
             await self.validateCurrentState()
+        }
+
+        // Observe event streams from the sub-managers. Each lives for the
+        // lifetime of SecureAuthenticationManager and is cancelled in deinit.
+        startObservingSubManagerEvents()
+    }
+
+    private func startObservingSubManagerEvents() {
+        let licenseEvents = licenseManager.events
+        let trialEvents = trialManager.events
+
+        let licenseTask = Task { @MainActor [weak self] in
+            for await event in licenseEvents {
+                guard let self else { return }
+                switch event {
+                case .revokedByServer:
+                    self.authState = AuthStateReducer.reduce(
+                        current: self.authState,
+                        event: .licenseRevokedByServer(
+                            trialFallback: self.trialManager.checkTrialStatus()
+                        )
+                    )
+                }
+            }
+        }
+
+        let trialTask = Task { @MainActor [weak self] in
+            for await event in trialEvents {
+                guard let self else { return }
+                switch event {
+                case .deniedByServer:
+                    self.authState = AuthStateReducer.reduce(
+                        current: self.authState,
+                        event: .trialDeniedByServer
+                    )
+                }
+            }
+        }
+
+        eventObserverTasksLock.withLock { tasks in
+            // Cancel any tasks left from a previous start().
+            for task in tasks { task.cancel() }
+            tasks = [licenseTask, trialTask]
         }
     }
 

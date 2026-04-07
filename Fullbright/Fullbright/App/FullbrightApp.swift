@@ -8,12 +8,18 @@ import Sparkle
 
 @main
 struct FullbrightApp: App {
-    @State private var coordinator = AppCoordinator()
+    @State private var coordinator: AppCoordinator
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     init() {
+        // Build the production dependency graph once, in the only place
+        // that's allowed to do so, then hand it to the coordinator.
+        let dependencies = AppComposition.makeDependencies()
+        let coordinator = AppCoordinator(dependencies: dependencies)
+        _coordinator = State(initialValue: coordinator)
+
         // Wire coordinator to AppDelegate so lifecycle events route through it
-        appDelegate.coordinator = _coordinator.wrappedValue
+        appDelegate.coordinator = coordinator
     }
 
     var body: some Scene {

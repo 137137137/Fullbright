@@ -9,10 +9,10 @@ import Foundation
 import IOKit
 
 struct DeviceIdentifier: DeviceIdentifying, Sendable {
-    static let shared = DeviceIdentifier()
-
     /// Cached identifier for the default service — avoids repeated IOKit lookups.
     private let cachedIdentifier = computeIdentifier(service: AppIdentifier.serviceID)
+
+    init() {}
 
     /// SHA-256 hash of (Hardware UUID + Serial Number + service), used as a
     /// deterministic, privacy-preserving device fingerprint.

@@ -12,12 +12,16 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Trial
 
 @MainActor
 final class TrialManager: TrialManaging {
-    private let storage: any SecureStorageProviding
+    let storage: any SecureStorageProviding
     private let serverClient: any TrialServerClientProviding
     private let keychain: any KeychainProviding
-    private let deviceIdentifier: any DeviceIdentifying
+    let deviceIdentifier: any DeviceIdentifying
 
-    private static let trialDurationDays = 14
+    static let trialDurationDays = 14
+
+    /// Single-subscriber event stream. See LicenseManager.events for rationale.
+    let events: AsyncStream<TrialEvent>
+    private let eventsContinuation: AsyncStream<TrialEvent>.Continuation
 
     init(storage: any SecureStorageProviding,
          serverClient: any TrialServerClientProviding,
@@ -27,6 +31,10 @@ final class TrialManager: TrialManaging {
         self.serverClient = serverClient
         self.keychain = keychain
         self.deviceIdentifier = deviceIdentifier
+
+        let (stream, continuation) = AsyncStream<TrialEvent>.makeStream(bufferingPolicy: .unbounded)
+        self.events = stream
+        self.eventsContinuation = continuation
     }
 
     /// See LicenseManager.validationTaskLock for the rationale.
@@ -34,6 +42,7 @@ final class TrialManager: TrialManaging {
 
     nonisolated deinit {
         confirmationTaskLock.withLock { $0?.cancel() }
+        eventsContinuation.finish()
     }
 
     // MARK: - Trial Status
@@ -103,16 +112,10 @@ final class TrialManager: TrialManaging {
 
     // MARK: - Server Confirmation
 
-    /// Callback to notify the auth manager when trial state changes from server response
-    private(set) var onStateChange: (@MainActor (AuthenticationState) -> Void)?
-
-    func setOnStateChange(_ handler: @escaping @MainActor (AuthenticationState) -> Void) {
-        onStateChange = handler
-    }
-
     private func confirmTrialWithServer(trialData: SecureTrialData) {
         guard !trialData.confirmed else { return }
 
+        let continuation = self.eventsContinuation
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
             let result = await self.serverClient.registerTrial(deviceId: trialData.deviceId)
@@ -130,7 +133,7 @@ final class TrialManager: TrialManaging {
                 } catch {
                     logger.error("Failed to delete denied trial data: \(error, privacy: .public)")
                 }
-                self.onStateChange?(.expired)
+                continuation.yield(.deniedByServer)
             case .offline:
                 break
             }

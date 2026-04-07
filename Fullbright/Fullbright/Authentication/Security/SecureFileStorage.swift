@@ -14,8 +14,6 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Stora
 
 @MainActor
 final class SecureFileStorage: SecureStorageProviding {
-    static let shared = SecureFileStorage()
-
     private let keychain: any KeychainProviding
     private let deviceIdentifier: any DeviceIdentifying
     private let storageDirectoryOverride: URL?
@@ -46,8 +44,8 @@ final class SecureFileStorage: SecureStorageProviding {
     /// tag so knowing one key tells you nothing about the other.
     private let signer: any PayloadSigner
 
-    init(keychain: any KeychainProviding = KeychainManager.shared,
-         deviceIdentifier: any DeviceIdentifying = DeviceIdentifier.shared,
+    init(keychain: any KeychainProviding,
+         deviceIdentifier: any DeviceIdentifying,
          storageDirectory: URL? = nil) {
         self.keychain = keychain
         self.deviceIdentifier = deviceIdentifier

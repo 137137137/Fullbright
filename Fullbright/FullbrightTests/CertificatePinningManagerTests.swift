@@ -36,7 +36,7 @@ struct CertificatePinningManagerTests {
 
     @Test("createPinnedURLSession returns a session configured with TLS 1.2+")
     func createPinnedURLSession_configuresTLSFloor() {
-        let session = CertificatePinningManager.shared.createPinnedURLSession()
+        let session = CertificatePinningManager().createPinnedURLSession()
         let config = session.configuration
         #expect(config.tlsMinimumSupportedProtocolVersion == .TLSv12)
         #expect(config.tlsMaximumSupportedProtocolVersion == .TLSv13)
@@ -44,7 +44,7 @@ struct CertificatePinningManagerTests {
 
     @Test("pinned session disables cookies and URL cache")
     func createPinnedURLSession_disablesStorage() {
-        let session = CertificatePinningManager.shared.createPinnedURLSession()
+        let session = CertificatePinningManager().createPinnedURLSession()
         let config = session.configuration
         #expect(config.httpShouldSetCookies == false)
         #expect(config.httpCookieAcceptPolicy == .never)
@@ -60,7 +60,7 @@ struct CertificatePinningManagerTests {
         let intermediate = try #require(CertFixtures.cert(CertFixtures.intermediateBase64))
 
         let chain: [SecCertificate] = [leaf, intermediate]
-        #expect(CertificatePinningManager.shared.validateLeafSPKI(chain) == true)
+        #expect(CertificatePinningManager().validateLeafSPKI(chain) == true)
     }
 
     @Test("intermediate-only chain (leaf missing) is rejected")
@@ -71,12 +71,12 @@ struct CertificatePinningManagerTests {
         let intermediate = try #require(CertFixtures.cert(CertFixtures.intermediateBase64))
 
         let chain: [SecCertificate] = [intermediate]
-        #expect(CertificatePinningManager.shared.validateLeafSPKI(chain) == false)
+        #expect(CertificatePinningManager().validateLeafSPKI(chain) == false)
     }
 
     @Test("empty chain is rejected")
     func emptyChain_isRejected() {
-        #expect(CertificatePinningManager.shared.validateLeafSPKI([]) == false)
+        #expect(CertificatePinningManager().validateLeafSPKI([]) == false)
     }
 
     @Test("chain whose leaf is the intermediate (chain order swapped) is rejected")
@@ -88,6 +88,6 @@ struct CertificatePinningManagerTests {
 
         // intermediate first, leaf second — leaf is no longer at index 0
         let swapped: [SecCertificate] = [intermediate, leaf]
-        #expect(CertificatePinningManager.shared.validateLeafSPKI(swapped) == false)
+        #expect(CertificatePinningManager().validateLeafSPKI(swapped) == false)
     }
 }

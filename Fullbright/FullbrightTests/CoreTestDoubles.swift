@@ -61,6 +61,26 @@ final class StubNightShiftManager: NightShiftManaging {
 }
 
 @MainActor
+final class StubDisplayConfigurator: DisplayConfiguring {
+    var configureForXDRCalls: [UInt32] = []
+
+    func configureForXDR(displayID: UInt32) {
+        configureForXDRCalls.append(displayID)
+    }
+}
+
+@MainActor
+final class StubXDRDirtyFlagStore: XDRDirtyFlagStoring {
+    var isDirty: Bool = false
+    private(set) var restoreIfNeededCallCount = 0
+
+    func restoreIfNeeded() {
+        restoreIfNeededCallCount += 1
+        if isDirty { isDirty = false }
+    }
+}
+
+@MainActor
 final class StubGammaTableManager: GammaTableManaging {
     var maxEDR: Float = 1.6
 

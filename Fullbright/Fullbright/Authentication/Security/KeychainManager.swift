@@ -9,11 +9,9 @@ import Foundation
 import Security
 
 final class KeychainManager: Sendable, KeychainProviding {
-    static let shared = KeychainManager()
-
     private let serviceName = AppIdentifier.serviceID
 
-    private init() {}
+    init() {}
 
     // MARK: - Keychain Operations
 

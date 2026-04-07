@@ -16,7 +16,7 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Brigh
 
 @MainActor
 final class BrightnessKeyManager: BrightnessKeyManaging {
-    static let shared = BrightnessKeyManager()
+    init() {}
 
     // MARK: - Constants
 

@@ -12,10 +12,15 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Licen
 
 @MainActor
 final class LicenseManager: LicenseManaging {
-    private let storage: any SecureStorageProviding
+    let storage: any SecureStorageProviding
     private let serverClient: any LicenseValidationClientProviding & LicenseActivationClientProviding
-    private let deviceIdentifier: any DeviceIdentifying
+    let deviceIdentifier: any DeviceIdentifying
 
+    /// Single-subscriber event stream. The continuation is used to yield
+    /// events from background tasks; `events` is exposed to the auth
+    /// coordinator for observation.
+    let events: AsyncStream<LicenseEvent>
+    private let eventsContinuation: AsyncStream<LicenseEvent>.Continuation
 
     init(storage: any SecureStorageProviding,
          serverClient: any LicenseValidationClientProviding & LicenseActivationClientProviding,
@@ -23,6 +28,10 @@ final class LicenseManager: LicenseManaging {
         self.storage = storage
         self.serverClient = serverClient
         self.deviceIdentifier = deviceIdentifier
+
+        let (stream, continuation) = AsyncStream<LicenseEvent>.makeStream(bufferingPolicy: .unbounded)
+        self.events = stream
+        self.eventsContinuation = continuation
     }
 
     // MARK: - License Check
@@ -47,13 +56,6 @@ final class LicenseManager: LicenseManaging {
 
     // MARK: - License Validation
 
-    /// Callback to notify the auth manager when license state changes from server response
-    private(set) var onStateChange: (@MainActor (AuthenticationState) -> Void)?
-
-    func setOnStateChange(_ handler: @escaping @MainActor (AuthenticationState) -> Void) {
-        onStateChange = handler
-    }
-
     /// Wrapped in an OSAllocatedUnfairLock so the `nonisolated deinit` can
     /// cancel an in-flight validation task without violating the MainActor
     /// isolation of `LicenseManager` itself. Matches the pattern in
@@ -62,9 +64,11 @@ final class LicenseManager: LicenseManaging {
 
     nonisolated deinit {
         validationTaskLock.withLock { $0?.cancel() }
+        eventsContinuation.finish()
     }
 
     func validateLicenseInBackground(licenseKey: String) {
+        let continuation = self.eventsContinuation
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
             let result = await self.serverClient.validateLicense(
@@ -77,7 +81,7 @@ final class LicenseManager: LicenseManaging {
                 } catch {
                     logger.error("Failed to delete invalid license: \(error, privacy: .public)")
                 }
-                self.onStateChange?(.expired)
+                continuation.yield(.revokedByServer)
             }
         }
         // Replace any prior task atomically and cancel it.

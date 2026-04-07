@@ -17,7 +17,6 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Certi
 /// (pinnedLeafSPKIHashes, pinnedHosts). NSObject base has no mutable state.
 /// URLSessionDelegate callbacks execute on URLSession's delegate queue.
 final class CertificatePinningManager: NSObject, URLSessionDelegate, @unchecked Sendable {
-    static let shared = CertificatePinningManager()
 
     /// SPKI (Subject Public Key Info) SHA-256 hashes of the **leaf** certificates
     /// we accept for pinned hosts. The validator REQUIRES one of these to match
@@ -59,7 +58,7 @@ final class CertificatePinningManager: NSObject, URLSessionDelegate, @unchecked 
         "api.fullbright.app"
     ]
 
-    private override init() {
+    override init() {
         super.init()
     }
 

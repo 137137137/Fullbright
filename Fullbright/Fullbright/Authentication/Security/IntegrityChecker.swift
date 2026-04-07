@@ -10,7 +10,7 @@ import Security
 import Darwin
 
 struct IntegrityChecker: IntegrityChecking, Sendable {
-    static let shared = IntegrityChecker()
+    init() {}
 
     /// Returns true if all integrity checks pass (bundle ID, code signature, debugger).
     /// SecStaticCodeCheckValidity is synchronous and can take tens of

@@ -7,6 +7,22 @@ import Foundation
 import Testing
 @testable import Fullbright
 
+/// Polls `condition` until it returns true or `timeout` expires. Used by
+/// tests that assert eventual state transitions after async event delivery.
+@MainActor
+private func waitUntilState(
+    of manager: SecureAuthenticationManager,
+    matches expected: AuthenticationState,
+    timeout: Duration = .seconds(2)
+) async -> Bool {
+    let start = ContinuousClock.now
+    while ContinuousClock.now - start < timeout {
+        if manager.authState == expected { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return manager.authState == expected
+}
+
 @MainActor
 struct SecureAuthenticationManagerTests {
 
@@ -96,15 +112,20 @@ struct SecureAuthenticationManagerTests {
         trial.nextCheckResult = .trial(daysRemaining: 5, expiryDate: expiry)
         let (manager, _, license2) = makeManager(trial: trial, license: license)
         await manager.start()
-        license2.emitStateChange(.expired)
-        #expect(manager.authState == .trial(daysRemaining: 5, expiryDate: expiry))
+        license2.yield(.revokedByServer)
+        let reached = await waitUntilState(
+            of: manager,
+            matches: .trial(daysRemaining: 5, expiryDate: expiry)
+        )
+        #expect(reached)
     }
 
     @Test func trialServerDenies_setsExpired() async {
         let trial = StubTrialManager()
         let (manager, trial2, _) = makeManager(trial: trial)
         await manager.start()
-        trial2.emitStateChange(.expired)
-        #expect(manager.authState == .expired)
+        trial2.yield(.deniedByServer)
+        let reached = await waitUntilState(of: manager, matches: .expired)
+        #expect(reached)
     }
 }

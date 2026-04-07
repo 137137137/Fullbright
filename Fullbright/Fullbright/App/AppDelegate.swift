@@ -64,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // XDRController's static methods and CGDisplayRestoreColorSyncSettings
                 // are safe to call from this context.
                 CGDisplayRestoreColorSyncSettings()
-                XDRController.clearDirtyGammaFlag()
+                UserDefaultsXDRDirtyFlagStore().isDirty = false
                 exit(0)
             }
             source.resume()

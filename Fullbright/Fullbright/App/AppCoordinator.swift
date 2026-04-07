@@ -2,7 +2,9 @@
 //  AppCoordinator.swift
 //  Fullbright
 //
-//  Composition root: services, view models, auth-state → XDR wiring.
+//  Holds the app's dependency graph and reacts to auth-state transitions.
+//  Construction lives in AppComposition.makeDependencies() — this file
+//  does NOT call `.init()` on any protocol-existential-typed field.
 //
 
 import Foundation
@@ -23,61 +25,43 @@ final class AppCoordinator {
     private let keyManager: any BrightnessKeyManaging
     private let osdController: XDRBrightnessOSDWindowController
     private let restoreGammaIfNeeded: @MainActor () -> Void
+    private let authStateObserver: any AuthStateObserving
+    private let osdEventRouter: any OSDEventRouting
 
-    @ObservationIgnored
-    private let authObservationTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    init(dependencies: AppDependencies) {
+        self.xdrController = dependencies.xdrController
+        self.keyManager = dependencies.keyManager
+        self.authManager = dependencies.authManager
+        self.osdController = dependencies.osdController
+        self.authStateObserver = dependencies.authStateObserver
+        self.osdEventRouter = dependencies.osdEventRouter
+        self.updaterController = dependencies.updaterController
+        self.restoreGammaIfNeeded = dependencies.restoreGammaIfNeeded
+        self.menuBarViewModel = dependencies.menuBarViewModel
+        self.settingsViewModel = dependencies.settingsViewModel
 
-    init(xdrController: (any XDRControlling)? = nil,
-         authManager: (any AuthenticationManaging)? = nil,
-         keyManager: (any BrightnessKeyManaging)? = nil,
-         restoreGammaIfNeeded: (@MainActor () -> Void)? = nil) {
-        let xdr = xdrController ?? XDRController.shared
-        let km = keyManager ?? BrightnessKeyManager.shared
-
-        // Build the auth stack here so the pinned URLSession isn't hidden inside
-        // AuthServerClient.init.
-        let auth: any AuthenticationManaging
-        if let injected = authManager {
-            auth = injected
-        } else {
-            let pinnedSession = CertificatePinningManager.shared.createPinnedURLSession()
-            let serverClient = AuthServerClient(session: pinnedSession)
-            auth = SecureAuthenticationManager(serverClient: serverClient)
-        }
-
-        let updater = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: nil,
-            userDriverDelegate: nil
-        )
-
-        self.xdrController = xdr
-        self.authManager = auth
-        self.keyManager = km
-        self.osdController = XDRBrightnessOSDWindowController(xdrController: xdr)
-        // Explicit closure so the @Sendable contract is satisfied.
-        self.restoreGammaIfNeeded = restoreGammaIfNeeded ?? { XDRController.restoreGammaIfNeeded() }
-        self.updaterController = updater
-        self.menuBarViewModel = MenuBarViewModel(xdrController: xdr, authManager: auth, updaterController: updater)
-        self.settingsViewModel = SettingsViewModel(authManager: auth, updaterController: updater)
-
-        // Deferred out of `SecureAuthenticationManager.init` so the background
-        // Task it posts doesn't capture a half-initialized self. start() is
-        // async now (integrity check runs on a detached task), and init
-        // cannot be async, so we wrap in a Task. By the time any UI is
-        // visible the initial check has finished.
+        // Kick off the initial auth check. Deferred out of
+        // SecureAuthenticationManager.init so the background Task it
+        // posts doesn't capture a half-initialized self.
         Task { @MainActor in
-            await auth.start()
+            await self.authManager.start()
         }
 
-        configureBrightnessKeyManager()
+        // Wire hardware input → XDR controller → OSD.
+        osdEventRouter.attach(to: keyManager)
+
+        // React to auth-state transitions and re-sync XDR + key manager.
         syncXDRState()
-        let observationTask = Self.createAuthObservationTask(coordinator: self)
-        authObservationTaskLock.withLock { $0 = observationTask }
+        authStateObserver.start { [weak self] _ in
+            self?.syncXDRState()
+        }
     }
 
     nonisolated deinit {
-        authObservationTaskLock.withLock { $0?.cancel() }
+        // AuthStateObserver's own deinit cancels its task; nothing else to
+        // clean up here. OSDEventRouter leaves its callback in place
+        // intentionally — the key manager is a long-lived singleton and
+        // recreating the callback on next init is explicit.
     }
 
     // MARK: - App Lifecycle (called by AppDelegate)
@@ -99,17 +83,7 @@ final class AppCoordinator {
         }
     }
 
-    // MARK: - Brightness Key Manager Setup
-
-    private func configureBrightnessKeyManager() {
-        // Capture step now so the event-tap callback never touches .shared.
-        let step = keyManager.brightnessStep
-        keyManager.onBrightnessKey = { [weak self] isUp in
-            guard let self else { return }
-            self.xdrController.adjustBrightness(delta: isUp ? step : -step)
-            self.osdController.show()
-        }
-    }
+    // MARK: - XDR state sync
 
     private func syncXDRState() {
         let supported = xdrController.isXDRSupported
@@ -129,32 +103,6 @@ final class AppCoordinator {
         } else if !canUse {
             keyManager.intercepting = false
             keyManager.stop()
-        }
-    }
-
-    // MARK: - Auth State Observation
-
-    // Re-syncs XDR on every distinct authState transition. `withObservationTracking`
-    // is edge-triggered (fires once per cycle), so this isn't a polling loop.
-    private static func createAuthObservationTask(coordinator: AppCoordinator) -> Task<Void, Never> {
-        var lastState = coordinator.authManager.authState
-        return Task { @MainActor [weak coordinator] in
-            while !Task.isCancelled {
-                guard let coordinator else { break }
-                await withCheckedContinuation { continuation in
-                    withObservationTracking {
-                        _ = coordinator.authManager.authState
-                    } onChange: {
-                        continuation.resume()
-                    }
-                }
-                guard !Task.isCancelled else { break }
-                let newState = coordinator.authManager.authState
-                if newState != lastState {
-                    coordinator.syncXDRState()
-                    lastState = newState
-                }
-            }
         }
     }
 }

@@ -98,7 +98,15 @@ final class StubTrialManager: TrialManaging {
     var nextStartResult: AuthenticationState = .notAuthenticated
     private(set) var checkCallCount = 0
     private(set) var startCallCount = 0
-    var stateChangeHandler: ((AuthenticationState) -> Void)?
+
+    let events: AsyncStream<TrialEvent>
+    private let eventsContinuation: AsyncStream<TrialEvent>.Continuation
+
+    init() {
+        let (stream, continuation) = AsyncStream<TrialEvent>.makeStream(bufferingPolicy: .unbounded)
+        self.events = stream
+        self.eventsContinuation = continuation
+    }
 
     func checkTrialStatus() -> AuthenticationState {
         checkCallCount += 1
@@ -110,12 +118,9 @@ final class StubTrialManager: TrialManaging {
         return nextStartResult
     }
 
-    func setOnStateChange(_ handler: @escaping @MainActor (AuthenticationState) -> Void) {
-        stateChangeHandler = handler
-    }
-
-    func emitStateChange(_ state: AuthenticationState) {
-        stateChangeHandler?(state)
+    /// Test helper to push an event through the stream.
+    func yield(_ event: TrialEvent) {
+        eventsContinuation.yield(event)
     }
 }
 
@@ -137,15 +142,19 @@ final class StubLicenseManager: LicenseManaging {
     private(set) var checkCallCount = 0
     private(set) var revokeCallCount = 0
     private(set) var validateBackgroundCallCount = 0
-    var stateChangeHandler: ((AuthenticationState) -> Void)?
+
+    let events: AsyncStream<LicenseEvent>
+    private let eventsContinuation: AsyncStream<LicenseEvent>.Continuation
+
+    init() {
+        let (stream, continuation) = AsyncStream<LicenseEvent>.makeStream(bufferingPolicy: .unbounded)
+        self.events = stream
+        self.eventsContinuation = continuation
+    }
 
     func checkLicense() -> AuthenticationState? {
         checkCallCount += 1
         return nextCheckResult
-    }
-
-    func setOnStateChange(_ handler: @escaping @MainActor (AuthenticationState) -> Void) {
-        stateChangeHandler = handler
     }
 
     func validateLicenseInBackground(licenseKey: String) {
@@ -164,8 +173,9 @@ final class StubLicenseManager: LicenseManaging {
         revokeCallCount += 1
     }
 
-    func emitStateChange(_ state: AuthenticationState) {
-        stateChangeHandler?(state)
+    /// Test helper to push an event through the stream.
+    func yield(_ event: LicenseEvent) {
+        eventsContinuation.yield(event)
     }
 }
 

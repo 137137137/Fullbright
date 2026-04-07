@@ -45,19 +45,16 @@ final class DisplayServicesClient: DisplayServicesProviding {
         return b
     }
 
-    @discardableResult
     func setBrightness(_ displayID: UInt32, _ value: Float) -> Bool {
         guard let fn = fnSetBrightness else { return false }
         return fn(displayID, value) == 0
     }
 
-    @discardableResult
     func setLinearBrightness(_ displayID: UInt32, _ value: Float) -> Bool {
         guard let fn = fnSetLinearBrightness else { return false }
         return fn(displayID, value) == 0
     }
 
-    @discardableResult
     func setAmbientLightCompensation(_ displayID: UInt32, enabled: Bool) -> Bool {
         guard let fn = fnEnableALC else { return false }
         return fn(displayID, enabled) == 0

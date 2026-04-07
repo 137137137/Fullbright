@@ -28,8 +28,6 @@ import AppKit
 import CoreGraphics
 import os
 
-private let skyLightPath = "/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/SkyLight"
-
 private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "XDR")
 
 // MARK: - XDRController
@@ -37,7 +35,6 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "XDR")
 @MainActor
 @Observable
 final class XDRController: XDRControlling {
-    static let shared = XDRController()
 
     // MARK: - Constants
 
@@ -60,35 +57,14 @@ final class XDRController: XDRControlling {
         static let initialScaling: Float = 0.5
     }
 
-    private enum SLSMode {
-        /// SLSConfigureDisplayEnabled mode values
-        static let configModes: [UInt32] = [4, 3, 5, 2]
-    }
+    // MARK: - Crash Recovery Entry Point
 
-    // MARK: - Dirty Gamma Flag (crash recovery)
-
-    /// Called on launch — if the app crashed with modified gamma, restore
-    /// system defaults. `@MainActor` because CGDisplayRestoreColorSyncSettings
-    /// is documented main-thread-only. All current callers
-    /// (AppDelegate.installGracefulShutdownHandlers) are already on main; the
-    /// annotation makes this constraint enforceable by the compiler.
+    /// Called on launch. Delegates to a fresh `UserDefaultsXDRDirtyFlagStore`
+    /// so AppDelegate doesn't need to know about the store type. The store
+    /// itself lives in XDRDirtyFlagStore.swift.
     @MainActor
     static func restoreGammaIfNeeded() {
-        if UserDefaults.standard.bool(forKey: DefaultsKey.gammaModified) {
-            logger.warning("Dirty gamma flag found — restoring ColorSync settings from previous crash")
-            CGDisplayRestoreColorSyncSettings()
-            clearDirtyGammaFlag()
-        }
-    }
-
-    @MainActor
-    private static func setDirtyGammaFlag() {
-        UserDefaults.standard.set(true, forKey: DefaultsKey.gammaModified)
-    }
-
-    @MainActor
-    static func clearDirtyGammaFlag() {
-        UserDefaults.standard.set(false, forKey: DefaultsKey.gammaModified)
+        UserDefaultsXDRDirtyFlagStore().restoreIfNeeded()
     }
 
     // MARK: - Observable State
@@ -105,6 +81,8 @@ final class XDRController: XDRControlling {
     private let displayServices: any DisplayServicesProviding
     private let nightShiftManager: any NightShiftManaging
     private var gammaManager: any GammaTableManaging
+    private let displayConfigurator: any DisplayConfiguring
+    private let dirtyFlagStore: any XDRDirtyFlagStoring
 
     // State
     private var hdrWindow: NSWindow?
@@ -128,11 +106,15 @@ final class XDRController: XDRControlling {
          displayServices: (any DisplayServicesProviding)? = nil,
          nightShiftManager: (any NightShiftManaging)? = nil,
          gammaManager: (any GammaTableManaging)? = nil,
+         displayConfigurator: (any DisplayConfiguring)? = nil,
+         dirtyFlagStore: (any XDRDirtyFlagStoring)? = nil,
          supportsXDROverride: Bool? = nil) {
         self.displayID = displayID
         self.displayServices = displayServices ?? DisplayServicesClient()
         self.nightShiftManager = nightShiftManager ?? NightShiftManager()
         self.gammaManager = gammaManager ?? GammaTableManager()
+        self.displayConfigurator = displayConfigurator ?? SkyLightDisplayConfigurator()
+        self.dirtyFlagStore = dirtyFlagStore ?? UserDefaultsXDRDirtyFlagStore()
 
         if let override = supportsXDROverride {
             supported = override
@@ -148,27 +130,8 @@ final class XDRController: XDRControlling {
         // Configure the display for XDR capability. Skipped when the override
         // is explicitly provided to keep tests off the real SkyLight path.
         if supported && supportsXDROverride == nil {
-            Self.configureDisplayForXDR(self.displayID)
+            self.displayConfigurator.configureForXDR(displayID: self.displayID)
         }
-    }
-
-    /// SLSConfigureDisplayEnabled -> CGCompleteDisplayConfiguration
-    private static func configureDisplayForXDR(_ displayID: UInt32) {
-        typealias SLSConfigFn = @convention(c) (OpaquePointer, UInt32, UInt32) -> Int32
-
-        guard let slHandle = PrivateFrameworkLoader.loadFramework(skyLightPath),
-              let slsConfigure: SLSConfigFn = PrivateFrameworkLoader.symbol(
-                  "SLSConfigureDisplayEnabled", from: slHandle, as: SLSConfigFn.self
-              ) else { return }
-
-        var config: CGDisplayConfigRef?
-        guard CGBeginDisplayConfiguration(&config) == .success, let cfg = config else { return }
-
-        for mode in SLSMode.configModes {
-            _ = slsConfigure(cfg, mode, 1)
-        }
-
-        _ = CGCompleteDisplayConfiguration(cfg, .permanently)
     }
 
     // MARK: - Public API
@@ -181,12 +144,21 @@ final class XDRController: XDRControlling {
 
         brightnessBeforeXDR = displayServices.getBrightness(displayID)
 
-        // Step 1-2: Set brightness and linear brightness to max
-        displayServices.setBrightness(displayID, 1.0)
-        displayServices.setLinearBrightness(displayID, 1.0)
+        // Step 1-2: Set brightness and linear brightness to max. Failure is
+        // logged because the private APIs sometimes silently no-op on
+        // unusual display configurations; we still continue because the
+        // downstream gamma path is the true brightness source under XDR.
+        if !displayServices.setBrightness(displayID, 1.0) {
+            logger.warning("DisplayServices.setBrightness returned failure during XDR enable")
+        }
+        if !displayServices.setLinearBrightness(displayID, 1.0) {
+            logger.warning("DisplayServices.setLinearBrightness returned failure during XDR enable")
+        }
 
         // Step 3: Disable adaptive brightness
-        displayServices.setAmbientLightCompensation(displayID, enabled: false)
+        if !displayServices.setAmbientLightCompensation(displayID, enabled: false) {
+            logger.warning("DisplayServices.setAmbientLightCompensation(false) returned failure")
+        }
 
         // Step 4: Disable Night Shift (must happen before gamma reads)
         nightShiftWasEnabled = nightShiftManager.isEnabled
@@ -201,7 +173,7 @@ final class XDRController: XDRControlling {
         }
 
         isEnabled = true
-        Self.setDirtyGammaFlag()
+        dirtyFlagStore.isDirty = true
 
         // Step 7: After 2s, apply scaled gamma table
         let task = Task { @MainActor [weak self] in
@@ -237,11 +209,15 @@ final class XDRController: XDRControlling {
         }
 
         // Step 3: Re-enable adaptive brightness
-        displayServices.setAmbientLightCompensation(displayID, enabled: true)
+        if !displayServices.setAmbientLightCompensation(displayID, enabled: true) {
+            logger.warning("DisplayServices.setAmbientLightCompensation(true) returned failure")
+        }
 
         // Step 4: Restore brightness
         let restore = brightnessBeforeXDR > BrightnessThreshold.minimumRestore ? brightnessBeforeXDR : BrightnessThreshold.defaultRestore
-        displayServices.setBrightness(displayID, restore)
+        if !displayServices.setBrightness(displayID, restore) {
+            logger.warning("DisplayServices.setBrightness returned failure during XDR disable")
+        }
 
         // Step 5: Destroy HDR window
         hdrWindow?.orderOut(nil)
@@ -249,7 +225,7 @@ final class XDRController: XDRControlling {
 
         isEnabled = false
         gammaManager.resetLogging()
-        Self.clearDirtyGammaFlag()
+        dirtyFlagStore.isDirty = false
         return true
     }
 
