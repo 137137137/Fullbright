@@ -34,40 +34,40 @@ struct SecureAuthenticationManagerTests {
         #expect(manager.authState == .notAuthenticated)
     }
 
-    @Test func start_failedIntegrityCheck_setsExpired() {
+    @Test func start_failedIntegrityCheck_setsExpired() async {
         let (manager, _, _) = makeManager(integrityPasses: false)
-        manager.start()
+        await manager.start()
         #expect(manager.authState == .expired)
     }
 
-    @Test func start_noTrialNoLicense_remainsNotAuthenticated() {
+    @Test func start_noTrialNoLicense_remainsNotAuthenticated() async {
         let trial = StubTrialManager()
         let license = StubLicenseManager()
         license.nextCheckResult = nil
         trial.nextCheckResult = .notAuthenticated
         let (manager, _, _) = makeManager(trial: trial, license: license)
-        manager.start()
+        await manager.start()
         #expect(manager.authState == .notAuthenticated)
     }
 
-    @Test func start_withStoredLicense_becomesAuthenticated() {
+    @Test func start_withStoredLicense_becomesAuthenticated() async {
         let trial = StubTrialManager()
         let license = StubLicenseManager()
         license.nextCheckResult = .authenticated(licenseKey: "ABC")
         let (manager, _, license2) = makeManager(trial: trial, license: license)
-        manager.start()
+        await manager.start()
         #expect(manager.authState == .authenticated(licenseKey: "ABC"))
         #expect(license2.validateBackgroundCallCount == 1)
     }
 
-    @Test func start_withActiveTrial_becomesTrial() {
+    @Test func start_withActiveTrial_becomesTrial() async {
         let trial = StubTrialManager()
         let license = StubLicenseManager()
         let expiry = Date(timeIntervalSinceNow: 86400 * 7)
         license.nextCheckResult = nil
         trial.nextCheckResult = .trial(daysRemaining: 7, expiryDate: expiry)
         let (manager, _, _) = makeManager(trial: trial, license: license)
-        manager.start()
+        await manager.start()
         #expect(manager.authState == .trial(daysRemaining: 7, expiryDate: expiry))
     }
 
@@ -89,21 +89,21 @@ struct SecureAuthenticationManagerTests {
         #expect(manager.authState == .expired)
     }
 
-    @Test func licenseRevocation_fallsBackToTrialState() {
+    @Test func licenseRevocation_fallsBackToTrialState() async {
         let trial = StubTrialManager()
         let license = StubLicenseManager()
         let expiry = Date(timeIntervalSinceNow: 86400 * 5)
         trial.nextCheckResult = .trial(daysRemaining: 5, expiryDate: expiry)
         let (manager, _, license2) = makeManager(trial: trial, license: license)
-        manager.start()
+        await manager.start()
         license2.emitStateChange(.expired)
         #expect(manager.authState == .trial(daysRemaining: 5, expiryDate: expiry))
     }
 
-    @Test func trialServerDenies_setsExpired() {
+    @Test func trialServerDenies_setsExpired() async {
         let trial = StubTrialManager()
         let (manager, trial2, _) = makeManager(trial: trial)
-        manager.start()
+        await manager.start()
         trial2.emitStateChange(.expired)
         #expect(manager.authState == .expired)
     }

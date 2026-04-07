@@ -67,8 +67,13 @@ final class XDRController: XDRControlling {
 
     // MARK: - Dirty Gamma Flag (crash recovery)
 
-    /// Called on launch — if the app crashed with modified gamma, restore system defaults.
-    nonisolated static func restoreGammaIfNeeded() {
+    /// Called on launch — if the app crashed with modified gamma, restore
+    /// system defaults. `@MainActor` because CGDisplayRestoreColorSyncSettings
+    /// is documented main-thread-only. All current callers
+    /// (AppDelegate.installGracefulShutdownHandlers) are already on main; the
+    /// annotation makes this constraint enforceable by the compiler.
+    @MainActor
+    static func restoreGammaIfNeeded() {
         if UserDefaults.standard.bool(forKey: DefaultsKey.gammaModified) {
             logger.warning("Dirty gamma flag found — restoring ColorSync settings from previous crash")
             CGDisplayRestoreColorSyncSettings()
@@ -76,11 +81,13 @@ final class XDRController: XDRControlling {
         }
     }
 
-    private nonisolated static func setDirtyGammaFlag() {
+    @MainActor
+    private static func setDirtyGammaFlag() {
         UserDefaults.standard.set(true, forKey: DefaultsKey.gammaModified)
     }
 
-    nonisolated static func clearDirtyGammaFlag() {
+    @MainActor
+    static func clearDirtyGammaFlag() {
         UserDefaults.standard.set(false, forKey: DefaultsKey.gammaModified)
     }
 

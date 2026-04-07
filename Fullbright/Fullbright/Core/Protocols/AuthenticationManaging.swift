@@ -13,7 +13,9 @@ protocol AuthenticationManaging: AnyObject {
 
     /// Runs the initial auth check and starts background monitoring.
     /// Call once from the composition root after construction.
-    func start()
+    /// Async because the initial integrity check is offloaded to a
+    /// detached task (SecStaticCodeCheckValidity is blocking).
+    func start() async
 
     func refreshAuthenticationState()
     func startTrial()

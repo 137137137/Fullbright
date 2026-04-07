@@ -40,6 +40,9 @@ final class XDRBrightnessOSDWindow: NSPanel, NSWindowDelegate {
     @objc dynamic var hovering = false
 
     private var fadeTask: Task<Void, Never>?
+    /// First-show layout Task is stored so rapid repeated calls to
+    /// showOSD don't spawn multiple concurrent repositioning tasks.
+    private var layoutTask: Task<Void, Never>?
     private var hoverTrackingArea: NSTrackingArea?
 
     override func mouseEntered(with event: NSEvent) {
@@ -55,6 +58,8 @@ final class XDRBrightnessOSDWindow: NSPanel, NSWindowDelegate {
     func hideOSD() {
         fadeTask?.cancel()
         fadeTask = nil
+        layoutTask?.cancel()
+        layoutTask = nil
         removeHoverTrackingArea()
         contentView?.superview?.alphaValue = 0.0
         close()
@@ -71,11 +76,18 @@ final class XDRBrightnessOSDWindow: NSPanel, NSWindowDelegate {
         let y = vf.maxY - contentSize.height - OSDLayout.windowTopMargin
         setFrame(NSRect(origin: NSPoint(x: x, y: y), size: contentSize), display: true)
 
-        // If the size isn't known yet (first show), reposition after layout
+        // If the size isn't known yet (first show), reposition after layout.
+        // Cancel any in-flight layout task before starting a new one to
+        // prevent a burst of showOSD calls from stacking up layout work.
         if contentSize.width <= 1 {
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(10))
-                guard let self, let size = self.contentView?.fittingSize else { return }
+            layoutTask?.cancel()
+            layoutTask = Task { @MainActor [weak self] in
+                do {
+                    try await Task.sleep(for: .milliseconds(10))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled, let self, let size = self.contentView?.fittingSize else { return }
                 self.setContentSize(size)
                 let x = vf.maxX - size.width - OSDLayout.windowTrailingMargin
                 let y = vf.maxY - size.height - OSDLayout.windowTopMargin

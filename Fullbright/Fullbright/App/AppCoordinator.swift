@@ -22,7 +22,7 @@ final class AppCoordinator {
 
     private let keyManager: any BrightnessKeyManaging
     private let osdController: XDRBrightnessOSDWindowController
-    private let restoreGammaIfNeeded: @Sendable () -> Void
+    private let restoreGammaIfNeeded: @MainActor () -> Void
 
     @ObservationIgnored
     private let authObservationTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
@@ -30,7 +30,7 @@ final class AppCoordinator {
     init(xdrController: (any XDRControlling)? = nil,
          authManager: (any AuthenticationManaging)? = nil,
          keyManager: (any BrightnessKeyManaging)? = nil,
-         restoreGammaIfNeeded: (@Sendable () -> Void)? = nil) {
+         restoreGammaIfNeeded: (@MainActor () -> Void)? = nil) {
         let xdr = xdrController ?? XDRController.shared
         let km = keyManager ?? BrightnessKeyManager.shared
 
@@ -62,8 +62,13 @@ final class AppCoordinator {
         self.settingsViewModel = SettingsViewModel(authManager: auth, updaterController: updater)
 
         // Deferred out of `SecureAuthenticationManager.init` so the background
-        // Task it posts doesn't capture a half-initialized self.
-        auth.start()
+        // Task it posts doesn't capture a half-initialized self. start() is
+        // async now (integrity check runs on a detached task), and init
+        // cannot be async, so we wrap in a Task. By the time any UI is
+        // visible the initial check has finished.
+        Task { @MainActor in
+            await auth.start()
+        }
 
         configureBrightnessKeyManager()
         syncXDRState()
