@@ -9,19 +9,8 @@ import Foundation
 import Testing
 @testable import Fullbright
 
-/// Minimal BrightnessKeyManaging stub. We only care about `brightnessStep`
-/// and `onBrightnessKey` for the router tests.
-@MainActor
-private final class StubBrightnessKeyManager: BrightnessKeyManaging {
-    var brightnessStep: Float = 0.1
-    var intercepting: Bool = false
-    var onBrightnessKey: BrightnessKeyHandler?
-    var startCallCount = 0
-    var stopCallCount = 0
-
-    func start() { startCallCount += 1 }
-    func stop() { stopCallCount += 1 }
-}
+// StubBrightnessKeyManager is defined in ViewModelTestDoubles.swift so
+// multiple test suites can share it.
 
 @MainActor
 @Suite("OSDEventRouter")

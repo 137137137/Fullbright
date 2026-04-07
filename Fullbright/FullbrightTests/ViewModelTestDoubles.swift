@@ -81,14 +81,15 @@ final class StubXDRController: XDRControlling {
 }
 
 @MainActor
+@Observable
 final class StubAuthManager: AuthenticationManaging {
     var authState: AuthenticationState = .notAuthenticated
-    var startCallCount = 0
-    var refreshCallCount = 0
-    var startTrialCallCount = 0
-    var activateLicenseCalls: [String] = []
-    var nextActivationResult: (success: Bool, message: String?) = (true, nil)
-    var logoutCallCount = 0
+    @ObservationIgnored var startCallCount = 0
+    @ObservationIgnored var refreshCallCount = 0
+    @ObservationIgnored var startTrialCallCount = 0
+    @ObservationIgnored var activateLicenseCalls: [String] = []
+    @ObservationIgnored var nextActivationResult: (success: Bool, message: String?) = (true, nil)
+    @ObservationIgnored var logoutCallCount = 0
 
     func start() async { startCallCount += 1 }
     func refreshAuthenticationState() { refreshCallCount += 1 }
@@ -100,4 +101,16 @@ final class StubAuthManager: AuthenticationManaging {
     }
 
     func logout() { logoutCallCount += 1 }
+}
+
+@MainActor
+final class StubBrightnessKeyManager: BrightnessKeyManaging {
+    var brightnessStep: Float = 0.1
+    var intercepting: Bool = false
+    var onBrightnessKey: BrightnessKeyHandler?
+    private(set) var startCallCount = 0
+    private(set) var stopCallCount = 0
+
+    func start() { startCallCount += 1 }
+    func stop() { stopCallCount += 1 }
 }
