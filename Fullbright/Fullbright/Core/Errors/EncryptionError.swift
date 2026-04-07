@@ -6,8 +6,8 @@
 import Foundation
 
 enum EncryptionError: Error, LocalizedError {
-    case encryptionFailed(underlying: Error)
-    case decryptionFailed(underlying: Error)
+    case encryptionFailed(underlying: any Error)
+    case decryptionFailed(underlying: any Error)
 
     var errorDescription: String? {
         switch self {

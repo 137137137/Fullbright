@@ -14,7 +14,7 @@ func setDockVisibility(_ visible: Bool) {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var coordinator: AppCoordinator?
     private var onboardingWindowController: OnboardingWindowController?
-    private var signalSources: [DispatchSourceSignal] = []
+    private var signalSources: [any DispatchSourceSignal] = []
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {

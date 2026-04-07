@@ -42,7 +42,7 @@ struct DebugAuthActions {
         self.authManager = authManager
     }
 
-    private var debug: DebugAuthManaging? { authManager as? DebugAuthManaging }
+    private var debug: (any DebugAuthManaging)? { authManager as? any DebugAuthManaging }
 
     func setTrialDays(_ days: Int) { debug?.setTrialDaysRemaining(days) }
     func expireTrial() { debug?.expireTrial() }

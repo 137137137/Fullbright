@@ -29,7 +29,12 @@ final class TrialManager: TrialManaging {
         self.deviceIdentifier = deviceIdentifier
     }
 
-    deinit { confirmationTask?.cancel() }
+    /// See LicenseManager.validationTaskLock for the rationale.
+    private let confirmationTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+
+    nonisolated deinit {
+        confirmationTaskLock.withLock { $0?.cancel() }
+    }
 
     // MARK: - Trial Status
 
@@ -105,13 +110,10 @@ final class TrialManager: TrialManaging {
         onStateChange = handler
     }
 
-    private var confirmationTask: Task<Void, Never>?
-
     private func confirmTrialWithServer(trialData: SecureTrialData) {
         guard !trialData.confirmed else { return }
 
-        confirmationTask?.cancel()
-        confirmationTask = Task { @MainActor [weak self] in
+        let task = Task { @MainActor [weak self] in
             guard let self else { return }
             let result = await self.serverClient.registerTrial(deviceId: trialData.deviceId)
             switch result {
@@ -132,6 +134,10 @@ final class TrialManager: TrialManaging {
             case .offline:
                 break
             }
+        }
+        confirmationTaskLock.withLock { existing in
+            existing?.cancel()
+            existing = task
         }
     }
 

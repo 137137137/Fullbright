@@ -54,13 +54,18 @@ final class LicenseManager: LicenseManaging {
         onStateChange = handler
     }
 
-    private var validationTask: Task<Void, Never>?
+    /// Wrapped in an OSAllocatedUnfairLock so the `nonisolated deinit` can
+    /// cancel an in-flight validation task without violating the MainActor
+    /// isolation of `LicenseManager` itself. Matches the pattern in
+    /// SecureAuthenticationManager.
+    private let validationTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
 
-    deinit { validationTask?.cancel() }
+    nonisolated deinit {
+        validationTaskLock.withLock { $0?.cancel() }
+    }
 
     func validateLicenseInBackground(licenseKey: String) {
-        validationTask?.cancel()
-        validationTask = Task { @MainActor [weak self] in
+        let task = Task { @MainActor [weak self] in
             guard let self else { return }
             let result = await self.serverClient.validateLicense(
                 licenseKey: licenseKey,
@@ -74,6 +79,11 @@ final class LicenseManager: LicenseManaging {
                 }
                 self.onStateChange?(.expired)
             }
+        }
+        // Replace any prior task atomically and cancel it.
+        validationTaskLock.withLock { existing in
+            existing?.cancel()
+            existing = task
         }
     }
 

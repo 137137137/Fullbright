@@ -79,7 +79,10 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         // CGEventTap requires accessibility permissions
         guard AXIsProcessTrusted() else {
             logger.info("Accessibility NOT granted — prompting user")
-            let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
+            // kAXTrustedCheckOptionPrompt is a global `var` in ApplicationServices which
+            // strict concurrency flags as non-Sendable. The underlying CFString value is
+            // documented and stable across OS versions, so we reference it by literal.
+            let options = ["AXTrustedCheckOptionPrompt" as CFString: true] as CFDictionary
             AXIsProcessTrustedWithOptions(options)
             return
         }

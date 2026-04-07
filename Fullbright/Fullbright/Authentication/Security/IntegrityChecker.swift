@@ -13,20 +13,25 @@ struct IntegrityChecker: IntegrityChecking, Sendable {
     static let shared = IntegrityChecker()
 
     /// Returns true if all integrity checks pass (bundle ID, code signature, debugger).
-    func passesAllChecks() -> Bool {
-        guard Bundle.main.bundleIdentifier == AppIdentifier.expectedBundleIdentifier else {
-            return false
-        }
+    /// SecStaticCodeCheckValidity is synchronous and can take tens of
+    /// milliseconds on first call, so we offload it to a utility-priority
+    /// detached task to keep the main actor responsive during launch.
+    func passesAllChecks() async -> Bool {
+        await Task.detached(priority: .utility) {
+            guard Bundle.main.bundleIdentifier == AppIdentifier.expectedBundleIdentifier else {
+                return false
+            }
 
-        if !Self.isCodeSignatureValid() {
-            return false
-        }
+            if !Self.isCodeSignatureValid() {
+                return false
+            }
 
-        if Self.isBeingDebugged() && !Self.isDebugBuild() {
-            return false
-        }
+            if Self.isBeingDebugged() && !Self.isDebugBuild() {
+                return false
+            }
 
-        return true
+            return true
+        }.value
     }
 
     // MARK: - Code Signature

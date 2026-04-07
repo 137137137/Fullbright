@@ -51,7 +51,7 @@ struct StubDeviceIdentifier: DeviceIdentifying {
 struct StubIntegrityChecker: IntegrityChecking {
     let passes: Bool
     init(passes: Bool = true) { self.passes = passes }
-    func passesAllChecks() -> Bool { passes }
+    func passesAllChecks() async -> Bool { passes }
 }
 
 final class StubAuthServerClient: AuthServerClientProviding, @unchecked Sendable {

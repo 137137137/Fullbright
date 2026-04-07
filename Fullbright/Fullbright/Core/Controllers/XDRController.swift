@@ -103,20 +103,33 @@ final class XDRController: XDRControlling {
     private var hdrWindow: NSWindow?
     private var nightShiftWasEnabled = false
     private var brightnessBeforeXDR: Float = 0.8
-    private var rampTask: Task<Void, Never>?
+
+    /// The ramp-up delay task spawned by enableXDR. Wrapped in a lock so the
+    /// `nonisolated deinit` can cancel it even though the controller is
+    /// MainActor-isolated. Without this, releasing the singleton (e.g. in
+    /// tests) leaks a running Task until it finishes its sleep.
+    @ObservationIgnored
+    private let rampTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+
+    nonisolated deinit {
+        rampTaskLock.withLock { $0?.cancel() }
+    }
 
     private let supported: Bool
 
     init(displayID: UInt32 = CGMainDisplayID(),
          displayServices: (any DisplayServicesProviding)? = nil,
          nightShiftManager: (any NightShiftManaging)? = nil,
-         gammaManager: (any GammaTableManaging)? = nil) {
+         gammaManager: (any GammaTableManaging)? = nil,
+         supportsXDROverride: Bool? = nil) {
         self.displayID = displayID
         self.displayServices = displayServices ?? DisplayServicesClient()
         self.nightShiftManager = nightShiftManager ?? NightShiftManager()
         self.gammaManager = gammaManager ?? GammaTableManager()
 
-        if let screen = NSScreen.main {
+        if let override = supportsXDROverride {
+            supported = override
+        } else if let screen = NSScreen.main {
             supported = screen.maximumPotentialExtendedDynamicRangeColorComponentValue > XDRThreshold.minimumEDR
         } else {
             supported = false
@@ -125,8 +138,9 @@ final class XDRController: XDRControlling {
         // Read the default gamma table at init before anything modifies it.
         self.gammaManager.readDefaultGamma(displayID: self.displayID)
 
-        // Configure the display for XDR capability.
-        if supported {
+        // Configure the display for XDR capability. Skipped when the override
+        // is explicitly provided to keep tests off the real SkyLight path.
+        if supported && supportsXDROverride == nil {
             Self.configureDisplayForXDR(self.displayID)
         }
     }
@@ -183,11 +197,14 @@ final class XDRController: XDRControlling {
         Self.setDirtyGammaFlag()
 
         // Step 7: After 2s, apply scaled gamma table
-        rampTask?.cancel()
-        rampTask = Task { @MainActor [weak self] in
+        let task = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(Timing.gammaRampDelay))
             guard !Task.isCancelled, let self, self.isEnabled else { return }
             self.rampUpGamma()
+        }
+        rampTaskLock.withLock { existing in
+            existing?.cancel()
+            existing = task
         }
 
         return true
@@ -198,8 +215,10 @@ final class XDRController: XDRControlling {
         guard isEnabled else { return false }
 
         // Stop gamma reapply
-        rampTask?.cancel()
-        rampTask = nil
+        rampTaskLock.withLock { existing in
+            existing?.cancel()
+            existing = nil
+        }
         gammaManager.stopRenderLoop()
 
         // Step 1: Restore gamma

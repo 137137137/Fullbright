@@ -78,13 +78,20 @@ final class SecureAuthenticationManager: AuthenticationManaging {
 
     /// Runs the initial check and starts monitoring. Kept out of `init` because
     /// the background Task captures `self` — posting before init returns is dicey.
+    ///
+    /// IntegrityChecker.passesAllChecks is async now, so the initial check
+    /// happens inside a Task rather than blocking start() synchronously. This
+    /// keeps app launch snappy even if SecStaticCodeCheckValidity is slow.
     func start() {
-        if !integrityChecker.passesAllChecks() {
-            authState = .expired
-        } else {
-            refreshAuthenticationState()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if await !self.integrityChecker.passesAllChecks() {
+                self.authState = .expired
+            } else {
+                self.refreshAuthenticationState()
+            }
+            self.startIntegrityMonitoring()
         }
-        startIntegrityMonitoring()
     }
 
     // MARK: - Integrity Monitoring
@@ -94,7 +101,7 @@ final class SecureAuthenticationManager: AuthenticationManaging {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(300))
                 guard !Task.isCancelled, let self else { return }
-                if !self.integrityChecker.passesAllChecks() {
+                if await !self.integrityChecker.passesAllChecks() {
                     self.authState = .expired
                 }
                 await self.validateCurrentState()

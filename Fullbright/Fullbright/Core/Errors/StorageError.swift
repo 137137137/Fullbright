@@ -6,10 +6,10 @@
 import Foundation
 
 enum StorageError: Error, LocalizedError {
-    case encodingFailed(underlying: Error)
-    case decodingFailed(underlying: Error)
-    case saveFailed(underlying: Error)
-    case deleteFailed(underlying: Error)
+    case encodingFailed(underlying: any Error)
+    case decodingFailed(underlying: any Error)
+    case saveFailed(underlying: any Error)
+    case deleteFailed(underlying: any Error)
 
     var errorDescription: String? {
         switch self {

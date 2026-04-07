@@ -1,4 +1,0 @@
-//
-//  FullbrightTests.swift
-//  FullbrightTests
-//
