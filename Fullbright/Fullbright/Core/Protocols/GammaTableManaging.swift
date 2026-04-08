@@ -10,6 +10,7 @@ import Foundation
 @MainActor
 protocol GammaTableManaging {
     var maxEDR: Float { get }
+    var displayPeakNits: Float { get }
 
     func readDefaultGamma(displayID: UInt32)
     func recomputeMaxEDR()

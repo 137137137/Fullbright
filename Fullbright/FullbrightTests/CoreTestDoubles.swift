@@ -83,6 +83,7 @@ final class StubXDRDirtyFlagStore: XDRDirtyFlagStoring {
 @MainActor
 final class StubGammaTableManager: GammaTableManaging {
     var maxEDR: Float = 1.6
+    var displayPeakNits: Float = 1600
 
     var readDefaultGammaCount = 0
     var recomputeMaxEDRCount = 0

@@ -43,6 +43,9 @@ final class GammaTableManager: GammaTableManaging {
     @ObservationIgnored private var scaledBlue = [Float](repeating: 0, count: 256)
 
     private(set) var maxEDR: Float = 1.425738
+    /// Raw display peak nits (from potential EDR) for OSD display.
+    /// Distinct from `maxEDR` which is a gamma scaling ceiling.
+    private(set) var displayPeakNits: Float = BrightnessNitsConverter.sdrMaxNits
     private var targetBrightness: Float = 0.0
     private var appliedBrightness: Float = 0.0
     private var hasLoggedScaling = false
@@ -107,6 +110,8 @@ final class GammaTableManager: GammaTableManaging {
         if let screen = NSScreen.main {
             let edr = screen.maximumExtendedDynamicRangeColorComponentValue
             maxEDR = Self.computeMaxEDR(edr: edr)
+            let potential = Float(screen.maximumPotentialExtendedDynamicRangeColorComponentValue)
+            displayPeakNits = max(BrightnessNitsConverter.sdrMaxNits, potential * 100.0)
         }
     }
 

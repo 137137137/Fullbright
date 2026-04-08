@@ -244,6 +244,6 @@ final class XDRController: XDRControlling {
     }
 
     private func updateNits() {
-        currentNits = BrightnessNitsConverter.nits(from: brightness, maxEDR: gammaManager.maxEDR)
+        currentNits = BrightnessNitsConverter.nits(from: brightness, maxNits: gammaManager.displayPeakNits)
     }
 }
