@@ -53,8 +53,8 @@ final class XDRController: XDRControlling {
         static let minimumRestore: Float = 0.02
         /// Default brightness to restore if pre-XDR reading was too low
         static let defaultRestore: Float = 0.8
-        /// Multiplier to convert hardware brightness to unified brightness at XDR enable
-        static let initialScaling: Float = 0.5
+        /// Initial unified brightness on XDR enable (1.0 = full XDR / display peak)
+        static let initialOnEnable: Float = 1.0
     }
 
     // MARK: - Observable State
@@ -234,8 +234,10 @@ final class XDRController: XDRControlling {
 
         gammaManager.recomputeMaxEDR()
 
-        // Initialize unified brightness from hardware state before XDR enable
-        brightness = brightnessBeforeXDR * BrightnessThreshold.initialScaling
+        // Land at full XDR on enable — the user asked for XDR by toggling it
+        // on, so take them to the display peak. Subsequent brightness keys
+        // adjust down from there.
+        brightness = BrightnessThreshold.initialOnEnable
         updateNits()
         let initialTarget = gammaManager.softwareBrightness(from: brightness)
 

@@ -183,7 +183,8 @@ struct XDRControllerTests {
         let (controller, _, _, _, _, _) = makeController()
         _ = controller.enableXDR()
 
-        // enableXDR sets brightness = brightnessBeforeXDR * 0.5 = 0.5 * 0.5 = 0.25
+        // enableXDR kicks off an async ramp-up (2s sleep); this test doesn't
+        // await it, so `brightness` is still at its default here.
         controller.adjustBrightness(delta: 2.0)
         #expect(controller.brightness == 1.0)
 
