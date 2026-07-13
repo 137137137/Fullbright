@@ -11,6 +11,7 @@ import CoreGraphics
 // DisplayServices function signatures:
 private typealias DSGetBrightnessFunc = @convention(c) (UInt32, UnsafeMutablePointer<Float>) -> Int32
 private typealias DSSetBrightnessFunc = @convention(c) (UInt32, Float) -> Int32
+private typealias DSGetLinearBrightnessFunc = @convention(c) (UInt32, UnsafeMutablePointer<Float>) -> Int32
 private typealias DSSetLinearBrightnessFunc = @convention(c) (UInt32, Float) -> Int32
 // EnableALC takes TWO params: (displayID, enabled)
 private typealias DSEnableALCFunc = @convention(c) (UInt32, Bool) -> Int32
@@ -21,6 +22,7 @@ private let displayServicesPath = "/System/Library/PrivateFrameworks/DisplayServ
 final class DisplayServicesClient: DisplayServicesProviding {
     private let fnGetBrightness: DSGetBrightnessFunc?
     private let fnSetBrightness: DSSetBrightnessFunc?
+    private let fnGetLinearBrightness: DSGetLinearBrightnessFunc?
     private let fnSetLinearBrightness: DSSetLinearBrightnessFunc?
     private let fnEnableALC: DSEnableALCFunc?
 
@@ -28,11 +30,13 @@ final class DisplayServicesClient: DisplayServicesProviding {
         if let handle = PrivateFrameworkLoader.loadFramework(displayServicesPath) {
             fnGetBrightness = PrivateFrameworkLoader.symbol("DisplayServicesGetBrightness", from: handle, as: DSGetBrightnessFunc.self)
             fnSetBrightness = PrivateFrameworkLoader.symbol("DisplayServicesSetBrightness", from: handle, as: DSSetBrightnessFunc.self)
+            fnGetLinearBrightness = PrivateFrameworkLoader.symbol("DisplayServicesGetLinearBrightness", from: handle, as: DSGetLinearBrightnessFunc.self)
             fnSetLinearBrightness = PrivateFrameworkLoader.symbol("DisplayServicesSetLinearBrightness", from: handle, as: DSSetLinearBrightnessFunc.self)
             fnEnableALC = PrivateFrameworkLoader.symbol("DisplayServicesEnableAmbientLightCompensation", from: handle, as: DSEnableALCFunc.self)
         } else {
             fnGetBrightness = nil
             fnSetBrightness = nil
+            fnGetLinearBrightness = nil
             fnSetLinearBrightness = nil
             fnEnableALC = nil
         }
@@ -42,6 +46,13 @@ final class DisplayServicesClient: DisplayServicesProviding {
         guard let fn = fnGetBrightness else { return 0 }
         var b: Float = 0
         _ = fn(displayID, &b)
+        return b
+    }
+
+    func getLinearBrightness(_ displayID: UInt32) -> Float? {
+        guard let fn = fnGetLinearBrightness else { return nil }
+        var b: Float = 0
+        guard fn(displayID, &b) == 0 else { return nil }
         return b
     }
 

@@ -87,12 +87,16 @@ enum AppComposition {
         let nightShift = NightShiftManager()
         let gammaManager = GammaTableManager()
         let displayConfigurator = SkyLightDisplayConfigurator()
+        let edrSignal = ScreenEDRSignalProvider()
+        let lifecycleObserver = DisplayLifecycleObserver()
         let xdrController: any XDRControlling = XDRController(
             displayServices: displayServices,
             nightShiftManager: nightShift,
             gammaManager: gammaManager,
             displayConfigurator: displayConfigurator,
-            dirtyFlagStore: dirtyFlagStore
+            dirtyFlagStore: dirtyFlagStore,
+            edrSignal: edrSignal,
+            lifecycleObserver: lifecycleObserver
         )
         let keyManager: any BrightnessKeyManaging = BrightnessKeyManager()
 

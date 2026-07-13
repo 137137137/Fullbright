@@ -15,6 +15,9 @@ import Foundation
 @MainActor
 protocol DisplayServicesProviding {
     func getBrightness(_ displayID: UInt32) -> Float
+    /// Linear (luminance-proportional) brightness in 0...1, or nil when the
+    /// private symbol is unavailable on this OS.
+    func getLinearBrightness(_ displayID: UInt32) -> Float?
     func setBrightness(_ displayID: UInt32, _ value: Float) -> Bool
     func setLinearBrightness(_ displayID: UInt32, _ value: Float) -> Bool
     func setAmbientLightCompensation(_ displayID: UInt32, enabled: Bool) -> Bool

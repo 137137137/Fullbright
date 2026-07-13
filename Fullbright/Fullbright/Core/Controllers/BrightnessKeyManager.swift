@@ -47,6 +47,11 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
 
     private static let interceptingState = OSAllocatedUnfairLock(initialState: false)
     private static let keyHandlerState = OSAllocatedUnfairLock<BrightnessKeyHandler?>(initialState: nil)
+    /// The live tap port, reachable from the C callback so it can re-enable
+    /// the tap when the system disables it (timeout / user input).
+    /// CFMachPort is not Sendable; access is confined to start/stop on the
+    /// main actor and CGEvent.tapEnable, which is thread-safe.
+    private static let tapPortState = OSAllocatedUnfairLock<CFMachPort?>(uncheckedState: nil)
 
     private static var isIntercepting: Bool {
         get { interceptingState.withLock { $0 } }
@@ -107,6 +112,7 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         }
 
         eventTap = tap
+        Self.tapPortState.withLockUnchecked { $0 = tap }
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         if let source = runLoopSource {
             CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
@@ -123,6 +129,7 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
             }
         }
         eventTap = nil
+        Self.tapPortState.withLockUnchecked { $0 = nil }
         runLoopSource = nil
         logger.info("Event tap stopped")
     }
@@ -133,6 +140,18 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         type: CGEventType,
         event: CGEvent
     ) -> Unmanaged<CGEvent>? {
+        // The system silently disables taps whose callbacks run too slowly
+        // (or on user-input interference). Without re-enabling here, every
+        // subsequent brightness key flows through natively — the native OSD
+        // reappears and ours goes dead until app restart.
+        if isTapDisabledEvent(type) {
+            logger.error("Event tap disabled by system (type \(type.rawValue, privacy: .public)) — re-enabling")
+            if let tap = tapPortState.withLockUnchecked({ $0 }) {
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+            return nil
+        }
+
         guard type.rawValue == MediaKey.sysDefinedEventType,
               let nsEvent = NSEvent(cgEvent: event),
               nsEvent.subtype.rawValue == MediaKey.mediaKeySubtype else {
@@ -166,5 +185,10 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         }
 
         return nil
+    }
+
+    /// Internal (not private) for unit testing.
+    static func isTapDisabledEvent(_ type: CGEventType) -> Bool {
+        type == .tapDisabledByTimeout || type == .tapDisabledByUserInput
     }
 }
