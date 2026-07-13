@@ -134,7 +134,7 @@ struct SecureAuthenticationManagerTests {
 
     @Test func trialServerDenies_setsExpired() async {
         let trial = StubTrialManager()
-        let (manager, trial2, _) = makeManager(trial: trial)
+        let (manager, trial2, _) = makeManager(trial: trial)a
         await manager.start()
         trial2.yield(.deniedByServer)
         let reached = await waitUntilState(of: manager, matches: .expired)

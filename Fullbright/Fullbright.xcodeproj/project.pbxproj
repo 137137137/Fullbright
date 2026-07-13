@@ -43,6 +43,13 @@
 			);
 			target = 1AB09F7D2E6945CF00C1CEE5 /* Fullbright */;
 		};
+		1AE5588E30052217008EC81D /* Exceptions for "FullbrightTests" folder in "FullbrightTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 1AB09F8B2E6945D000C1CEE5 /* FullbrightTests */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -56,6 +63,9 @@
 		};
 		1AB09F8F2E6945D000C1CEE5 /* FullbrightTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				1AE5588E30052217008EC81D /* Exceptions for "FullbrightTests" folder in "FullbrightTests" target */,
+			);
 			path = FullbrightTests;
 			sourceTree = "<group>";
 		};
@@ -201,7 +211,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1640;
-				LastUpgradeCheck = 2610;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					1AB09F7D2E6945CF00C1CEE5 = {
 						CreatedOnToolsVersion = 16.4;
@@ -434,7 +444,7 @@
 				CODE_SIGN_ENTITLEMENTS = Fullbright/Fullbright.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2.3;
+				CURRENT_PROJECT_VERSION = 2.4;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 3NT3PH4U3S;
 				ENABLE_APP_SANDBOX = NO;
@@ -458,7 +468,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = ideals.Fullbright;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -481,7 +491,7 @@
 				CODE_SIGN_ENTITLEMENTS = Fullbright/Fullbright.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2.3;
+				CURRENT_PROJECT_VERSION = 2.4;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 3NT3PH4U3S;
 				ENABLE_APP_SANDBOX = NO;
@@ -505,7 +515,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = ideals.Fullbright;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
