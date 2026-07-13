@@ -18,7 +18,7 @@ enum TrialEvent: Sendable, Equatable {
 /// Single-subscriber `events` stream — see LicenseManaging for rationale.
 @MainActor
 protocol TrialManaging: AnyObject {
-    func checkTrialStatus() -> AuthenticationState
-    func startTrial() -> AuthenticationState
+    func checkTrialStatus() async -> AuthenticationState
+    func startTrial() async -> AuthenticationState
     var events: AsyncStream<TrialEvent> { get }
 }

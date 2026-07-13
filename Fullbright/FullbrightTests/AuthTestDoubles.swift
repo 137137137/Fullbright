@@ -34,17 +34,16 @@ final class ThrowingLoadKeychain: KeychainProviding, @unchecked Sendable {
     func delete(for key: String) throws(KeychainError) {}
 }
 
-@MainActor
-final class InMemorySecureStorage: SecureStorageProviding {
+actor InMemorySecureStorage: SecureStorageProviding {
     private var blobs: [String: Data] = [:]
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    func saveEncrypted<T: Codable>(_ object: T, for key: String) throws {
+    func saveEncrypted<T: Encodable & Sendable>(_ object: T, for key: String) throws {
         blobs[key] = try encoder.encode(object)
     }
 
-    func loadEncrypted<T: Codable>(_ type: T.Type, for key: String) -> T? {
+    func loadEncrypted<T: Codable & Sendable>(_ type: T.Type, for key: String) -> T? {
         guard let data = blobs[key] else { return nil }
         return try? decoder.decode(type, from: data)
     }
@@ -119,12 +118,12 @@ final class StubTrialManager: TrialManaging {
         self.eventsContinuation = continuation
     }
 
-    func checkTrialStatus() -> AuthenticationState {
+    func checkTrialStatus() async -> AuthenticationState {
         checkCallCount += 1
         return nextCheckResult
     }
 
-    func startTrial() -> AuthenticationState {
+    func startTrial() async -> AuthenticationState {
         startCallCount += 1
         return nextStartResult
     }
@@ -137,11 +136,11 @@ final class StubTrialManager: TrialManaging {
 
 #if DEBUG
 extension StubTrialManager: DebugTrialManaging {
-    func setTrialDaysRemaining(_ days: Int) -> AuthenticationState { nextCheckResult }
-    func expireTrial() -> AuthenticationState { .expired }
-    func resetTrial() {}
+    func setTrialDaysRemaining(_ days: Int) async -> AuthenticationState { nextCheckResult }
+    func expireTrial() async -> AuthenticationState { .expired }
+    func resetTrial() async {}
     var trialDuration: Int { 14 }
-    func debugTrialInfo() -> String { "" }
+    func debugTrialInfo() async -> String { "" }
 }
 #endif
 
@@ -163,7 +162,7 @@ final class StubLicenseManager: LicenseManaging {
         self.eventsContinuation = continuation
     }
 
-    func checkLicense() -> AuthenticationState? {
+    func checkLicense() async -> AuthenticationState? {
         checkCallCount += 1
         return nextCheckResult
     }
@@ -180,7 +179,7 @@ final class StubLicenseManager: LicenseManaging {
         nextActivationResult
     }
 
-    func revokeLicense() {
+    func revokeLicense() async {
         revokeCallCount += 1
     }
 
@@ -192,7 +191,7 @@ final class StubLicenseManager: LicenseManaging {
 
 #if DEBUG
 extension StubLicenseManager: DebugLicenseManaging {
-    func debugLicenseInfo() -> String { "" }
-    func setValidLicense() {}
+    func debugLicenseInfo() async -> String { "" }
+    func setValidLicense() async {}
 }
 #endif

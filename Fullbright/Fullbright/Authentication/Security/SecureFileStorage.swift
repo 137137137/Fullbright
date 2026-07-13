@@ -12,8 +12,7 @@ import os
 
 private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Storage")
 
-@MainActor
-final class SecureFileStorage: SecureStorageProviding {
+actor SecureFileStorage: SecureStorageProviding {
     private let keychain: any KeychainProviding
     private let deviceIdentifier: any DeviceIdentifying
     private let storageDirectoryOverride: URL?
@@ -199,7 +198,7 @@ final class SecureFileStorage: SecureStorageProviding {
 
     /// Writes a payload by wrapping it in a SignedEnvelope (HMAC-signed)
     /// and then encrypting the envelope bytes with AES-GCM.
-    func saveEncrypted<T: Codable>(_ object: T, for key: String) throws {
+    func saveEncrypted<T: Encodable & Sendable>(_ object: T, for key: String) throws {
         let envelopeBytes: Data
         do {
             let envelope = try SignedEnvelope.wrap(object, signer: signer)
@@ -215,7 +214,7 @@ final class SecureFileStorage: SecureStorageProviding {
     /// v1 raw-payload format for legacy data (written before the envelope
     /// existed) and transparently re-saves it as v2 on first read so
     /// subsequent loads get the full HMAC protection.
-    func loadEncrypted<T: Codable>(_ type: T.Type, for key: String) -> T? {
+    func loadEncrypted<T: Codable & Sendable>(_ type: T.Type, for key: String) -> T? {
         guard let data = load(for: key) else { return nil }
 
         // v2 path — SignedEnvelope
@@ -281,7 +280,7 @@ final class SecureFileStorage: SecureStorageProviding {
     /// Writes a raw-payload v1 (pre-SignedEnvelope) record. Used only by
     /// migration tests that need to simulate pre-refactor on-disk data.
     /// Not exposed in Release builds.
-    func _writeLegacyV1Payload<T: Encodable>(_ payload: T, for key: String) throws {
+    func _writeLegacyV1Payload<T: Encodable & Sendable>(_ payload: T, for key: String) throws {
         let raw: Data
         do {
             raw = try encoder.encode(payload)

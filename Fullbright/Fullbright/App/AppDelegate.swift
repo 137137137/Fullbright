@@ -30,6 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // No coordinator means we're hosting the unit-test bundle (see
+        // FullbrightApp.init) — skip all real launch side effects.
+        guard coordinator != nil else { return }
+
         // If gamma was left dirty by a previous crash, restore it now
         coordinator?.restoreStateAfterCrash()
 

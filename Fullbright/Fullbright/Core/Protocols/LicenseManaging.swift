@@ -21,10 +21,10 @@ enum LicenseEvent: Sendable, Equatable {
 /// broadcasting to multiple observers is not supported by design.
 @MainActor
 protocol LicenseManaging: AnyObject {
-    func checkLicense() -> AuthenticationState?
+    func checkLicense() async -> AuthenticationState?
     var events: AsyncStream<LicenseEvent> { get }
     func validateLicenseInBackground(licenseKey: String)
     func validateLicense(licenseKey: String) async -> LicenseValidationResult
     func activateLicense(licenseKey: String) async -> LicenseActivationResult
-    func revokeLicense()
+    func revokeLicense() async
 }

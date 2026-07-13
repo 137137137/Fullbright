@@ -36,7 +36,7 @@ private struct Payload: Codable, Equatable {
 struct SecureFileStorageTests {
 
     @Test("round-trip: save then load returns identical payload")
-    func roundTrip_savesAndLoadsEquivalentPayload() throws {
+    func roundTrip_savesAndLoadsEquivalentPayload() async throws {
         let dir = TempDirectory()
         defer { dir.cleanup() }
 
@@ -47,14 +47,14 @@ struct SecureFileStorageTests {
         )
 
         let payload = Payload(licenseKey: "abc-123", deviceId: "device-a", count: 7)
-        try storage.saveEncrypted(payload, for: "test.key")
+        try await storage.saveEncrypted(payload, for: "test.key")
 
-        let loaded = storage.loadEncrypted(Payload.self, for: "test.key")
+        let loaded = await storage.loadEncrypted(Payload.self, for: "test.key")
         #expect(loaded == payload)
     }
 
     @Test("load returns nil when no file exists for the given key")
-    func load_missingKey_returnsNil() {
+    func load_missingKey_returnsNil() async {
         let dir = TempDirectory()
         defer { dir.cleanup() }
 
@@ -64,12 +64,12 @@ struct SecureFileStorageTests {
             storageDirectory: dir.url
         )
 
-        let loaded = storage.loadEncrypted(Payload.self, for: "nonexistent")
+        let loaded = await storage.loadEncrypted(Payload.self, for: "nonexistent")
         #expect(loaded == nil)
     }
 
     @Test("delete removes the on-disk file")
-    func delete_removesFileFromDisk() throws {
+    func delete_removesFileFromDisk() async throws {
         let dir = TempDirectory()
         defer { dir.cleanup() }
 
@@ -79,10 +79,10 @@ struct SecureFileStorageTests {
             storageDirectory: dir.url
         )
 
-        try storage.saveEncrypted(Payload(licenseKey: "x", deviceId: "y", count: 1), for: "test.key")
-        try storage.delete(for: "test.key")
+        try await storage.saveEncrypted(Payload(licenseKey: "x", deviceId: "y", count: 1), for: "test.key")
+        try await storage.delete(for: "test.key")
 
-        #expect(storage.loadEncrypted(Payload.self, for: "test.key") == nil)
+        #expect(await storage.loadEncrypted(Payload.self, for: "test.key") == nil)
     }
 
     @Test("salt is persisted to the keychain on first init")
@@ -101,22 +101,22 @@ struct SecureFileStorageTests {
     }
 
     @Test("two instances with the same keychain share the same derived key and can read each other's data")
-    func twoInstances_sameKeychain_shareSalt() throws {
+    func twoInstances_sameKeychain_shareSalt() async throws {
         let dir = TempDirectory()
         defer { dir.cleanup() }
         let keychain = InMemoryKeychain()
         let device = StubDeviceIdentifier("shared-device")
 
         let writer = SecureFileStorage(keychain: keychain, deviceIdentifier: device, storageDirectory: dir.url)
-        try writer.saveEncrypted(Payload(licenseKey: "k", deviceId: "shared-device", count: 3), for: "shared")
+        try await writer.saveEncrypted(Payload(licenseKey: "k", deviceId: "shared-device", count: 3), for: "shared")
 
         let reader = SecureFileStorage(keychain: keychain, deviceIdentifier: device, storageDirectory: dir.url)
-        let loaded = reader.loadEncrypted(Payload.self, for: "shared")
+        let loaded = await reader.loadEncrypted(Payload.self, for: "shared")
         #expect(loaded?.licenseKey == "k")
     }
 
     @Test("different device identifiers produce mutually unreadable data even with the same salt")
-    func differentDeviceIds_cannotDecryptEachOthersData() throws {
+    func differentDeviceIds_cannotDecryptEachOthersData() async throws {
         let dir = TempDirectory()
         defer { dir.cleanup() }
         let keychain = InMemoryKeychain()
@@ -126,7 +126,7 @@ struct SecureFileStorageTests {
             deviceIdentifier: StubDeviceIdentifier("alice"),
             storageDirectory: dir.url
         )
-        try alice.saveEncrypted(Payload(licenseKey: "secret", deviceId: "alice", count: 1), for: "test.key")
+        try await alice.saveEncrypted(Payload(licenseKey: "secret", deviceId: "alice", count: 1), for: "test.key")
 
         let bob = SecureFileStorage(
             keychain: keychain,
@@ -134,12 +134,12 @@ struct SecureFileStorageTests {
             storageDirectory: dir.url
         )
 
-        let loaded = bob.loadEncrypted(Payload.self, for: "test.key")
+        let loaded = await bob.loadEncrypted(Payload.self, for: "test.key")
         #expect(loaded == nil)
     }
 
     @Test("saved files are created with 0o600 permissions")
-    func save_setsRestrictiveFilePermissions() throws {
+    func save_setsRestrictiveFilePermissions() async throws {
         let dir = TempDirectory()
         defer { dir.cleanup() }
 
@@ -149,7 +149,7 @@ struct SecureFileStorageTests {
             storageDirectory: dir.url
         )
 
-        try storage.saveEncrypted(Payload(licenseKey: "x", deviceId: "y", count: 1), for: "perm.key")
+        try await storage.saveEncrypted(Payload(licenseKey: "x", deviceId: "y", count: 1), for: "perm.key")
 
         let contents = try FileManager.default.contentsOfDirectory(atPath: dir.url.path)
         let file = try #require(contents.first(where: { $0.hasPrefix(".") }))
@@ -162,7 +162,7 @@ struct SecureFileStorageTests {
     // MARK: - SignedEnvelope / migration
 
     @Test("legacy v1 data (raw payload, no envelope) is transparently accepted and migrated to v2 on read")
-    func load_legacyV1Payload_isAcceptedAndMigrated() throws {
+    func load_legacyV1Payload_isAcceptedAndMigrated() async throws {
         let dir = TempDirectory()
         defer { dir.cleanup() }
         let keychain = InMemoryKeychain()
@@ -171,29 +171,29 @@ struct SecureFileStorageTests {
         // Write a v1-format payload using the test-only legacy seam.
         let legacy = SecureFileStorage(keychain: keychain, deviceIdentifier: device, storageDirectory: dir.url)
         let payload = Payload(licenseKey: "legacy-key", deviceId: "legacy-device", count: 42)
-        try legacy._writeLegacyV1Payload(payload, for: "legacy.key")
+        try await legacy._writeLegacyV1Payload(payload, for: "legacy.key")
 
         // Now load via the real SecureFileStorage — should migrate.
         let storage = SecureFileStorage(keychain: keychain, deviceIdentifier: device, storageDirectory: dir.url)
-        let loaded = storage.loadEncrypted(Payload.self, for: "legacy.key")
+        let loaded = await storage.loadEncrypted(Payload.self, for: "legacy.key")
         #expect(loaded == payload)
 
         // After the first load, the on-disk data should now be v2 (SignedEnvelope).
         // The easiest way to verify this is to load again — it should still work
         // AND subsequent writes should continue to be v2.
-        let loadedAgain = storage.loadEncrypted(Payload.self, for: "legacy.key")
+        let loadedAgain = await storage.loadEncrypted(Payload.self, for: "legacy.key")
         #expect(loadedAgain == payload)
     }
 
     @Test("tampered envelope bytes are rejected")
-    func load_tamperedEnvelope_returnsNil() throws {
+    func load_tamperedEnvelope_returnsNil() async throws {
         let dir = TempDirectory()
         defer { dir.cleanup() }
         let keychain = InMemoryKeychain()
         let device = StubDeviceIdentifier("tamper-device")
 
         let storage = SecureFileStorage(keychain: keychain, deviceIdentifier: device, storageDirectory: dir.url)
-        try storage.saveEncrypted(Payload(licenseKey: "real", deviceId: "tamper-device", count: 1), for: "tamper.key")
+        try await storage.saveEncrypted(Payload(licenseKey: "real", deviceId: "tamper-device", count: 1), for: "tamper.key")
 
         // Locate and corrupt the on-disk file. AES-GCM authentication will
         // already reject this, which is the desired result — tests assert the
@@ -206,11 +206,11 @@ struct SecureFileStorageTests {
         bytes[bytes.count / 2] ^= 0xFF
         try bytes.write(to: fileURL)
 
-        #expect(storage.loadEncrypted(Payload.self, for: "tamper.key") == nil)
+        #expect(await storage.loadEncrypted(Payload.self, for: "tamper.key") == nil)
     }
 
     @Test("files on disk are not plaintext-readable as the original payload")
-    func save_writesEncryptedBytesNotPlaintext() throws {
+    func save_writesEncryptedBytesNotPlaintext() async throws {
         let dir = TempDirectory()
         defer { dir.cleanup() }
 
@@ -221,7 +221,7 @@ struct SecureFileStorageTests {
         )
 
         let secret = "super-secret-license-key-DO-NOT-LEAK"
-        try storage.saveEncrypted(Payload(licenseKey: secret, deviceId: "d", count: 1), for: "cipher.key")
+        try await storage.saveEncrypted(Payload(licenseKey: secret, deviceId: "d", count: 1), for: "cipher.key")
 
         let contents = try FileManager.default.contentsOfDirectory(atPath: dir.url.path)
         let file = try #require(contents.first(where: { $0.hasPrefix(".") }))

@@ -19,10 +19,10 @@ import Testing
 private final class TestAuthManager: AuthenticationManaging {
     var authState: AuthenticationState = .notAuthenticated
     func start() async {}
-    func refreshAuthenticationState() {}
-    func startTrial() {}
+    func refreshAuthenticationState() async {}
+    func startTrial() async {}
     func activateLicense(licenseKey: String) async -> LicenseActivationResult { .failure(message: "") }
-    func logout() {}
+    func logout() async {}
 }
 
 @MainActor

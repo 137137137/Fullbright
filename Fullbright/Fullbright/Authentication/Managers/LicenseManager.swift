@@ -37,8 +37,8 @@ final class LicenseManager: LicenseManaging {
     // MARK: - License Check
 
     /// Returns the license state if a valid license exists, nil otherwise.
-    func checkLicense() -> AuthenticationState? {
-        guard let licenseData = storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) else {
+    func checkLicense() async -> AuthenticationState? {
+        guard let licenseData = await storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) else {
             return nil
         }
 
@@ -46,7 +46,7 @@ final class LicenseManager: LicenseManaging {
             return .authenticated(licenseKey: licenseData.licenseKey)
         } else {
             do {
-                try storage.delete(for: StorageKey.licenseData)
+                try await storage.delete(for: StorageKey.licenseData)
             } catch {
                 logger.error("Failed to delete corrupt license data: \(error, privacy: .public)")
             }
@@ -78,7 +78,7 @@ final class LicenseManager: LicenseManaging {
             )
             if case .invalid = result {
                 do {
-                    try self.storage.delete(for: StorageKey.licenseData)
+                    try await self.storage.delete(for: StorageKey.licenseData)
                 } catch {
                     logger.error("Failed to delete invalid license: \(error, privacy: .public)")
                 }
@@ -109,7 +109,7 @@ final class LicenseManager: LicenseManaging {
                 deviceId: deviceId
             )
             do {
-                try storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
+                try await storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
             } catch {
                 logger.error("Failed to persist license data: \(error, privacy: .public)")
                 return .failure(message: "License activated but failed to save locally. Please try again.")
@@ -122,9 +122,9 @@ final class LicenseManager: LicenseManaging {
 
     // MARK: - License Revocation
 
-    func revokeLicense() {
+    func revokeLicense() async {
         do {
-            try storage.delete(for: StorageKey.licenseData)
+            try await storage.delete(for: StorageKey.licenseData)
         } catch {
             logger.error("Failed to delete license data on logout: \(error, privacy: .public)")
         }
@@ -134,8 +134,8 @@ final class LicenseManager: LicenseManaging {
 
 #if DEBUG
 extension LicenseManager: DebugLicenseManaging {
-    func debugLicenseInfo() -> String {
-        if let licenseData = self.storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) {
+    func debugLicenseInfo() async -> String {
+        if let licenseData = await self.storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) {
             return """
             License Key: \(licenseData.licenseKey)
             Activation Date: \(licenseData.activationDate)
@@ -145,13 +145,13 @@ extension LicenseManager: DebugLicenseManaging {
         return "No license data"
     }
 
-    func setValidLicense() {
+    func setValidLicense() async {
         let licenseData = SecureLicenseData(
             licenseKey: DebugConstants.testLicenseKey,
             activationDate: Date(),
             deviceId: deviceIdentifier.secureIdentifier
         )
-        try? storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
+        try? await storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
     }
 }
 #endif

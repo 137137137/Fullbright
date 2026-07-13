@@ -16,36 +16,36 @@ private let debugLogger = Logger(subsystem: AppIdentifier.serviceID, category: "
 
 extension SecureAuthenticationManager: DebugAuthManaging {
 
-    func setTrialDaysRemaining(_ days: Int) {
+    func setTrialDaysRemaining(_ days: Int) async {
         guard let debug = trialManager as? any DebugTrialManaging else { return }
-        authState = debug.setTrialDaysRemaining(days)
+        authState = await debug.setTrialDaysRemaining(days)
         debugLogger.debug("Trial set to \(days, privacy: .public) days remaining")
     }
 
-    func resetTrial() {
-        (trialManager as? any DebugTrialManaging)?.resetTrial()
-        licenseManager.revokeLicense()
+    func resetTrial() async {
+        await (trialManager as? any DebugTrialManaging)?.resetTrial()
+        await licenseManager.revokeLicense()
         authState = .notAuthenticated
-        refreshAuthenticationState()
+        await refreshAuthenticationState()
         debugLogger.debug("Trial reset - app will behave as first launch")
     }
 
-    func expireTrial() {
+    func expireTrial() async {
         guard let debug = trialManager as? any DebugTrialManaging else { return }
-        authState = debug.expireTrial()
+        authState = await debug.expireTrial()
         debugLogger.debug("Trial expired")
     }
 
-    func setValidLicense() {
-        (licenseManager as? any DebugLicenseManaging)?.setValidLicense()
+    func setValidLicense() async {
+        await (licenseManager as? any DebugLicenseManaging)?.setValidLicense()
         authState = .authenticated(licenseKey: DebugConstants.testLicenseKey)
         debugLogger.debug("Test license activated")
     }
 
-    func printDebugInfo() {
+    func printDebugInfo() async {
         let deviceId = deviceIdentifier.secureIdentifier
-        let trialInfo = (trialManager as? any DebugTrialManaging)?.debugTrialInfo() ?? "(no trial debug info)"
-        let licenseInfo = (licenseManager as? any DebugLicenseManaging)?.debugLicenseInfo() ?? "(no license debug info)"
+        let trialInfo = await (trialManager as? any DebugTrialManaging)?.debugTrialInfo() ?? "(no trial debug info)"
+        let licenseInfo = await (licenseManager as? any DebugLicenseManaging)?.debugLicenseInfo() ?? "(no license debug info)"
         debugLogger.debug("=== Authentication Debug Info ===")
         debugLogger.debug("Current State: \(String(describing: self.authState), privacy: .public)")
         debugLogger.debug("Device ID: \(deviceId)")
@@ -62,18 +62,18 @@ extension SecureAuthenticationManager: DebugAuthManaging {
 /// affordances under #if DEBUG guards.
 @MainActor
 protocol DebugTrialManaging {
-    func setTrialDaysRemaining(_ days: Int) -> AuthenticationState
-    func expireTrial() -> AuthenticationState
-    func resetTrial()
+    func setTrialDaysRemaining(_ days: Int) async -> AuthenticationState
+    func expireTrial() async -> AuthenticationState
+    func resetTrial() async
     var trialDuration: Int { get }
-    func debugTrialInfo() -> String
+    func debugTrialInfo() async -> String
 }
 
 /// DEBUG-only operations on LicenseManaging. Same rationale.
 @MainActor
 protocol DebugLicenseManaging {
-    func debugLicenseInfo() -> String
-    func setValidLicense()
+    func debugLicenseInfo() async -> String
+    func setValidLicense() async
 }
 
 #endif

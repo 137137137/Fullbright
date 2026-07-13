@@ -141,20 +141,20 @@ struct MenuBarViewModelTests {
     }
 
     @Test("refreshAuthIfUnauthenticated refreshes only in notAuthenticated or expired states")
-    func refreshAuth_onlyWhenUnauthenticated() {
+    func refreshAuth_onlyWhenUnauthenticated() async {
         let auth = StubAuthManager()
         let (vm, _, _, _) = makeViewModel(auth: auth)
 
         auth.authState = .notAuthenticated
-        vm.refreshAuthIfUnauthenticated()
+        await vm.refreshAuthIfUnauthenticated()
         #expect(auth.refreshCallCount == 1)
 
         auth.authState = .expired
-        vm.refreshAuthIfUnauthenticated()
+        await vm.refreshAuthIfUnauthenticated()
         #expect(auth.refreshCallCount == 2)
 
         auth.authState = .authenticated(licenseKey: "K")
-        vm.refreshAuthIfUnauthenticated()
+        await vm.refreshAuthIfUnauthenticated()
         #expect(auth.refreshCallCount == 2) // unchanged
     }
 }

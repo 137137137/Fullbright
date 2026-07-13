@@ -91,7 +91,8 @@ final class AppCoordinator {
 
     func handleOnboardingCompleted() {
         if authManager.authState == .notAuthenticated {
-            authManager.startTrial()
+            let authManager = self.authManager
+            Task { @MainActor in await authManager.startTrial() }
         }
     }
 

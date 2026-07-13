@@ -17,10 +17,10 @@ protocol AuthenticationManaging: AnyObject {
     /// detached task (SecStaticCodeCheckValidity is blocking).
     func start() async
 
-    func refreshAuthenticationState()
-    func startTrial()
+    func refreshAuthenticationState() async
+    func startTrial() async
     func activateLicense(licenseKey: String) async -> LicenseActivationResult
-    func logout()
+    func logout() async
 }
 
 // MARK: - Debug-Only Extensions
@@ -28,11 +28,11 @@ protocol AuthenticationManaging: AnyObject {
 #if DEBUG
 @MainActor
 protocol DebugAuthManaging: AuthenticationManaging {
-    func setTrialDaysRemaining(_ days: Int)
-    func resetTrial()
-    func expireTrial()
-    func setValidLicense()
-    func printDebugInfo()
+    func setTrialDaysRemaining(_ days: Int) async
+    func resetTrial() async
+    func expireTrial() async
+    func setValidLicense() async
+    func printDebugInfo() async
 }
 
 /// Debug auth actions shared by both view models.
@@ -46,11 +46,11 @@ struct DebugAuthActions {
 
     private var debug: (any DebugAuthManaging)? { authManager as? any DebugAuthManaging }
 
-    func setTrialDays(_ days: Int) { debug?.setTrialDaysRemaining(days) }
-    func expireTrial() { debug?.expireTrial() }
-    func resetTrial() { debug?.resetTrial() }
-    func setValidLicense() { debug?.setValidLicense() }
-    func clearLicense() { authManager.logout() }
-    func printInfo() { debug?.printDebugInfo() }
+    func setTrialDays(_ days: Int) async { await debug?.setTrialDaysRemaining(days) }
+    func expireTrial() async { await debug?.expireTrial() }
+    func resetTrial() async { await debug?.resetTrial() }
+    func setValidLicense() async { await debug?.setValidLicense() }
+    func clearLicense() async { await authManager.logout() }
+    func printInfo() async { await debug?.printDebugInfo() }
 }
 #endif

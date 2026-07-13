@@ -76,10 +76,10 @@ final class MenuBarViewModel {
         appLifecycle.activate()
     }
 
-    func refreshAuthIfUnauthenticated() {
+    func refreshAuthIfUnauthenticated() async {
         switch authManager.authState {
         case .notAuthenticated, .expired:
-            authManager.refreshAuthenticationState()
+            await authManager.refreshAuthenticationState()
         case .authenticated, .trial:
             break
         }

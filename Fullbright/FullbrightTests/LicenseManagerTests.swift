@@ -23,32 +23,32 @@ struct LicenseManagerTests {
         return (manager, storage, server)
     }
 
-    @Test func checkLicense_noStoredData_isNil() {
+    @Test func checkLicense_noStoredData_isNil() async {
         let (manager, _, _) = makeManager()
-        #expect(manager.checkLicense() == nil)
+        #expect(await manager.checkLicense() == nil)
     }
 
-    @Test func checkLicense_validStoredLicense_returnsAuthenticated() throws {
+    @Test func checkLicense_validStoredLicense_returnsAuthenticated() async throws {
         let (manager, storage, _) = makeManager()
         let licenseData = SecureLicenseData(
             licenseKey: "MY-KEY",
             activationDate: Date(),
             deviceId: "device-A"
         )
-        try storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
-        #expect(manager.checkLicense() == .authenticated(licenseKey: "MY-KEY"))
+        try await storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
+        #expect(await manager.checkLicense() == .authenticated(licenseKey: "MY-KEY"))
     }
 
-    @Test func checkLicense_deviceMismatch_returnsNilAndDeletesData() throws {
+    @Test func checkLicense_deviceMismatch_returnsNilAndDeletesData() async throws {
         let (manager, storage, _) = makeManager()
         let licenseData = SecureLicenseData(
             licenseKey: "MY-KEY",
             activationDate: Date(),
             deviceId: "OTHER-DEVICE"
         )
-        try storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
-        #expect(manager.checkLicense() == nil)
-        #expect(storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) == nil)
+        try await storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
+        #expect(await manager.checkLicense() == nil)
+        #expect(await storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) == nil)
     }
 
     @Test func activateLicense_serverSuccess_persistsAndReturnsSuccess() async {
@@ -56,7 +56,7 @@ struct LicenseManagerTests {
         server.setActivation(.success)
         let result = await manager.activateLicense(licenseKey: "NEW-KEY")
         if case .failure = result { Issue.record("Expected .success") }
-        let stored = storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData)
+        let stored = await storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData)
         #expect(stored?.licenseKey == "NEW-KEY")
     }
 
@@ -69,19 +69,19 @@ struct LicenseManagerTests {
         } else {
             Issue.record("Expected .failure")
         }
-        let stored = storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData)
+        let stored = await storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData)
         #expect(stored == nil)
     }
 
-    @Test func revokeLicense_removesStoredData() throws {
+    @Test func revokeLicense_removesStoredData() async throws {
         let (manager, storage, _) = makeManager()
         let licenseData = SecureLicenseData(
             licenseKey: "K",
             activationDate: Date(),
             deviceId: "device-A"
         )
-        try storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
-        manager.revokeLicense()
-        #expect(storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) == nil)
+        try await storage.saveEncrypted(licenseData, for: StorageKey.licenseData)
+        await manager.revokeLicense()
+        #expect(await storage.loadEncrypted(SecureLicenseData.self, for: StorageKey.licenseData) == nil)
     }
 }

@@ -25,21 +25,21 @@ struct TrialManagerTests {
         return (manager, storage, keychain, server)
     }
 
-    @Test func checkTrialStatus_noStoredData_isNotAuthenticated() {
+    @Test func checkTrialStatus_noStoredData_isNotAuthenticated() async {
         let (manager, _, _, _) = makeManager()
-        #expect(manager.checkTrialStatus() == .notAuthenticated)
+        #expect(await manager.checkTrialStatus() == .notAuthenticated)
     }
 
-    @Test func checkTrialStatus_freshTrial_returnsTrialState() throws {
+    @Test func checkTrialStatus_freshTrial_returnsTrialState() async throws {
         let (manager, storage, _, _) = makeManager()
         let trialData = SecureTrialData(
             startDate: Date(),
             deviceId: "device-A",
             confirmed: true
         )
-        try storage.saveEncrypted(trialData, for: StorageKey.trialData)
+        try await storage.saveEncrypted(trialData, for: StorageKey.trialData)
 
-        let state = manager.checkTrialStatus()
+        let state = await manager.checkTrialStatus()
         if case .trial(let daysRemaining, _) = state {
             #expect(daysRemaining >= 13 && daysRemaining <= 14)
         } else {
@@ -47,7 +47,7 @@ struct TrialManagerTests {
         }
     }
 
-    @Test func checkTrialStatus_expiredTrial_returnsExpired() throws {
+    @Test func checkTrialStatus_expiredTrial_returnsExpired() async throws {
         let (manager, storage, _, _) = makeManager()
         let oldStart = Calendar.current.date(byAdding: .day, value: -20, to: Date())!
         let trialData = SecureTrialData(
@@ -55,22 +55,22 @@ struct TrialManagerTests {
             deviceId: "device-A",
             confirmed: true
         )
-        try storage.saveEncrypted(trialData, for: StorageKey.trialData)
-        #expect(manager.checkTrialStatus() == .expired)
+        try await storage.saveEncrypted(trialData, for: StorageKey.trialData)
+        #expect(await manager.checkTrialStatus() == .expired)
     }
 
-    @Test func checkTrialStatus_deviceMismatch_returnsExpired() throws {
+    @Test func checkTrialStatus_deviceMismatch_returnsExpired() async throws {
         let (manager, storage, _, _) = makeManager()
         let trialData = SecureTrialData(
             startDate: Date(),
             deviceId: "different-device",
             confirmed: true
         )
-        try storage.saveEncrypted(trialData, for: StorageKey.trialData)
-        #expect(manager.checkTrialStatus() == .expired)
+        try await storage.saveEncrypted(trialData, for: StorageKey.trialData)
+        #expect(await manager.checkTrialStatus() == .expired)
     }
 
-    @Test func checkTrialStatus_clockRolledBackPastWatermark_returnsExpired() throws {
+    @Test func checkTrialStatus_clockRolledBackPastWatermark_returnsExpired() async throws {
         let (manager, storage, _, _) = makeManager()
         // The trial has already seen a wall-clock 3 days in the future —
         // i.e. the user ran the app, then set the clock back 3 days.
@@ -80,11 +80,11 @@ struct TrialManagerTests {
             confirmed: true,
             latestObservedDate: Date().addingTimeInterval(3 * 86400)
         )
-        try storage.saveEncrypted(trialData, for: StorageKey.trialData)
-        #expect(manager.checkTrialStatus() == .expired)
+        try await storage.saveEncrypted(trialData, for: StorageKey.trialData)
+        #expect(await manager.checkTrialStatus() == .expired)
     }
 
-    @Test func checkTrialStatus_smallClockDrift_withinTolerance_staysTrial() throws {
+    @Test func checkTrialStatus_smallClockDrift_withinTolerance_staysTrial() async throws {
         let (manager, storage, _, _) = makeManager()
         // Watermark 2 hours ahead of "now" — inside the 24h tolerance
         // (NTP correction, honest clock fix).
@@ -94,13 +94,13 @@ struct TrialManagerTests {
             confirmed: true,
             latestObservedDate: Date().addingTimeInterval(2 * 3600)
         )
-        try storage.saveEncrypted(trialData, for: StorageKey.trialData)
-        if case .trial = manager.checkTrialStatus() {} else {
+        try await storage.saveEncrypted(trialData, for: StorageKey.trialData)
+        if case .trial = await manager.checkTrialStatus() {} else {
             Issue.record("Expected .trial despite small clock drift")
         }
     }
 
-    @Test func checkTrialStatus_advancesWatermark() throws {
+    @Test func checkTrialStatus_advancesWatermark() async throws {
         let (manager, storage, _, _) = makeManager()
         let trialData = SecureTrialData(
             startDate: Calendar.current.date(byAdding: .day, value: -5, to: Date())!,
@@ -108,10 +108,10 @@ struct TrialManagerTests {
             confirmed: true,
             latestObservedDate: Calendar.current.date(byAdding: .day, value: -3, to: Date())!
         )
-        try storage.saveEncrypted(trialData, for: StorageKey.trialData)
-        _ = manager.checkTrialStatus()
+        try await storage.saveEncrypted(trialData, for: StorageKey.trialData)
+        _ = await manager.checkTrialStatus()
 
-        let stored = storage.loadEncrypted(SecureTrialData.self, for: StorageKey.trialData)
+        let stored = await storage.loadEncrypted(SecureTrialData.self, for: StorageKey.trialData)
         let watermark = try #require(stored?.latestObservedDate)
         #expect(abs(watermark.timeIntervalSinceNow) < 60)
         // Start date and confirmation state survive the watermark rewrite.
@@ -119,7 +119,7 @@ struct TrialManagerTests {
         #expect(stored?.confirmed == true)
     }
 
-    @Test func checkTrialStatus_legacyRecordWithoutWatermark_stillWorks() throws {
+    @Test func checkTrialStatus_legacyRecordWithoutWatermark_stillWorks() async throws {
         let (manager, storage, _, _) = makeManager()
         // Simulates a record written by a build predating the watermark.
         let trialData = SecureTrialData(
@@ -128,15 +128,15 @@ struct TrialManagerTests {
             confirmed: true,
             latestObservedDate: nil
         )
-        try storage.saveEncrypted(trialData, for: StorageKey.trialData)
-        if case .trial = manager.checkTrialStatus() {} else {
+        try await storage.saveEncrypted(trialData, for: StorageKey.trialData)
+        if case .trial = await manager.checkTrialStatus() {} else {
             Issue.record("Expected .trial for legacy record")
         }
     }
 
-    @Test func startTrial_freshDevice_returnsTrialState() {
+    @Test func startTrial_freshDevice_returnsTrialState() async {
         let (manager, _, _, _) = makeManager()
-        let state = manager.startTrial()
+        let state = await manager.startTrial()
         if case .trial(let daysRemaining, _) = state {
             #expect(daysRemaining == 14)
         } else {
@@ -144,28 +144,28 @@ struct TrialManagerTests {
         }
     }
 
-    @Test func startTrial_persistsTrialData() {
+    @Test func startTrial_persistsTrialData() async {
         let (manager, storage, _, _) = makeManager()
-        _ = manager.startTrial()
-        let stored = storage.loadEncrypted(SecureTrialData.self, for: StorageKey.trialData)
+        _ = await manager.startTrial()
+        let stored = await storage.loadEncrypted(SecureTrialData.self, for: StorageKey.trialData)
         #expect(stored != nil)
         #expect(stored?.deviceId == "device-A")
     }
 
-    @Test func startTrial_setsTrialUsedFlagInKeychain() {
+    @Test func startTrial_setsTrialUsedFlagInKeychain() async {
         let (manager, _, keychain, _) = makeManager()
-        _ = manager.startTrial()
+        _ = await manager.startTrial()
         #expect(keychain.load(for: StorageKey.trialUsed) != nil)
     }
 
-    @Test func startTrial_alreadyUsed_returnsExpired() throws {
+    @Test func startTrial_alreadyUsed_returnsExpired() async throws {
         let (manager, _, keychain, _) = makeManager()
         try keychain.save(Data([1]), for: StorageKey.trialUsed)
-        let state = manager.startTrial()
+        let state = await manager.startTrial()
         #expect(state == .expired)
     }
 
-    @Test func startTrial_keychainReadFails_deniesTrial() {
+    @Test func startTrial_keychainReadFails_deniesTrial() async {
         // A genuine keychain read failure (not "absent") must NOT be treated
         // as "trial never used" — otherwise a transient error re-grants a trial.
         let manager = TrialManager(
@@ -174,6 +174,6 @@ struct TrialManagerTests {
             keychain: ThrowingLoadKeychain(),
             deviceIdentifier: StubDeviceIdentifier()
         )
-        #expect(manager.startTrial() == .expired)
+        #expect(await manager.startTrial() == .expired)
     }
 }

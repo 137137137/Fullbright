@@ -176,9 +176,9 @@ struct SettingsView: View {
     private var debugSection: some View {
         Section {
             HStack {
-                Button("Set Test License") { viewModel.debugActions.setValidLicense() }
-                Button("Clear License") { viewModel.debugActions.clearLicense() }
-                Button("Reset Trial") { viewModel.debugActions.resetTrial() }
+                Button("Set Test License") { Task { await viewModel.debugActions.setValidLicense() } }
+                Button("Clear License") { Task { await viewModel.debugActions.clearLicense() } }
+                Button("Reset Trial") { Task { await viewModel.debugActions.resetTrial() } }
                 Button("Show Onboarding") {
                     viewModel.showOnboarding()
                 }

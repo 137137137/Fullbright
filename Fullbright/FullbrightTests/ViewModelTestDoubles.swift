@@ -96,15 +96,15 @@ final class StubAuthManager: AuthenticationManaging {
     @ObservationIgnored var logoutCallCount = 0
 
     func start() async { startCallCount += 1 }
-    func refreshAuthenticationState() { refreshCallCount += 1 }
-    func startTrial() { startTrialCallCount += 1 }
+    func refreshAuthenticationState() async { refreshCallCount += 1 }
+    func startTrial() async { startTrialCallCount += 1 }
 
     func activateLicense(licenseKey: String) async -> LicenseActivationResult {
         activateLicenseCalls.append(licenseKey)
         return nextActivationResult
     }
 
-    func logout() { logoutCallCount += 1 }
+    func logout() async { logoutCallCount += 1 }
 }
 
 @MainActor

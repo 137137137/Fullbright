@@ -56,8 +56,8 @@ final class TrialManager: TrialManaging {
 
     // MARK: - Trial Status
 
-    func checkTrialStatus() -> AuthenticationState {
-        if let trialData = storage.loadEncrypted(SecureTrialData.self, for: StorageKey.trialData) {
+    func checkTrialStatus() async -> AuthenticationState {
+        if let trialData = await storage.loadEncrypted(SecureTrialData.self, for: StorageKey.trialData) {
             guard trialData.isValid,
                   trialData.deviceId == deviceIdentifier.secureIdentifier else {
                 return .expired
@@ -74,7 +74,7 @@ final class TrialManager: TrialManaging {
                 return .expired
             }
             if now > watermark.addingTimeInterval(Self.watermarkUpdateGranularity) {
-                persistWatermark(now, for: trialData)
+                await persistWatermark(now, for: trialData)
             }
 
             let state = calculateTrialState(from: trialData)
@@ -88,7 +88,7 @@ final class TrialManager: TrialManaging {
     }
 
     /// Best-effort: a failed watermark write never blocks a valid trial.
-    private func persistWatermark(_ now: Date, for trialData: SecureTrialData) {
+    private func persistWatermark(_ now: Date, for trialData: SecureTrialData) async {
         let updated = SecureTrialData(
             startDate: trialData.startDate,
             deviceId: trialData.deviceId,
@@ -96,7 +96,7 @@ final class TrialManager: TrialManaging {
             latestObservedDate: now
         )
         do {
-            try storage.saveEncrypted(updated, for: StorageKey.trialData)
+            try await storage.saveEncrypted(updated, for: StorageKey.trialData)
         } catch {
             logger.error("Failed to persist trial date watermark: \(error, privacy: .public)")
         }
@@ -121,7 +121,7 @@ final class TrialManager: TrialManaging {
 
     // MARK: - Start Trial
 
-    func startTrial() -> AuthenticationState {
+    func startTrial() async -> AuthenticationState {
         let deviceId = deviceIdentifier.secureIdentifier
 
         do {
@@ -144,7 +144,7 @@ final class TrialManager: TrialManaging {
 
         let trialData = SecureTrialData(startDate: Date(), deviceId: deviceId, confirmed: false)
         do {
-            try storage.saveEncrypted(trialData, for: StorageKey.trialData)
+            try await storage.saveEncrypted(trialData, for: StorageKey.trialData)
         } catch {
             logger.error("Failed to save trial data: \(error, privacy: .public)")
             return .expired
@@ -177,13 +177,13 @@ final class TrialManager: TrialManaging {
                     latestObservedDate: trialData.latestObservedDate
                 )
                 do {
-                    try self.storage.saveEncrypted(confirmed, for: StorageKey.trialData)
+                    try await self.storage.saveEncrypted(confirmed, for: StorageKey.trialData)
                 } catch {
                     logger.error("Failed to persist trial confirmation: \(error, privacy: .public)")
                 }
             case .denied:
                 do {
-                    try self.storage.delete(for: StorageKey.trialData)
+                    try await self.storage.delete(for: StorageKey.trialData)
                 } catch {
                     logger.error("Failed to delete denied trial data: \(error, privacy: .public)")
                 }
@@ -198,32 +198,32 @@ final class TrialManager: TrialManaging {
 
 #if DEBUG
 extension TrialManager: DebugTrialManaging {
-    func setTrialDaysRemaining(_ days: Int) -> AuthenticationState {
+    func setTrialDaysRemaining(_ days: Int) async -> AuthenticationState {
         guard let startDate = Calendar.current.date(byAdding: .day, value: -(Self.trialDurationDays - days), to: Date()) else {
             return .expired
         }
         let trialData = SecureTrialData(startDate: startDate, deviceId: deviceIdentifier.secureIdentifier)
-        try? storage.saveEncrypted(trialData, for: StorageKey.trialData)
-        return checkTrialStatus()
+        try? await storage.saveEncrypted(trialData, for: StorageKey.trialData)
+        return await checkTrialStatus()
     }
 
-    func expireTrial() -> AuthenticationState {
+    func expireTrial() async -> AuthenticationState {
         guard let expiredDate = Calendar.current.date(byAdding: .day, value: -(Self.trialDurationDays + 1), to: Date()) else {
             return .expired
         }
         let trialData = SecureTrialData(startDate: expiredDate, deviceId: deviceIdentifier.secureIdentifier)
-        try? storage.saveEncrypted(trialData, for: StorageKey.trialData)
-        return checkTrialStatus()
+        try? await storage.saveEncrypted(trialData, for: StorageKey.trialData)
+        return await checkTrialStatus()
     }
 
-    func resetTrial() {
-        try? storage.delete(for: StorageKey.trialData)
+    func resetTrial() async {
+        try? await storage.delete(for: StorageKey.trialData)
     }
 
     var trialDuration: Int { Self.trialDurationDays }
 
-    func debugTrialInfo() -> String {
-        if let trialData = self.storage.loadEncrypted(SecureTrialData.self, for: StorageKey.trialData) {
+    func debugTrialInfo() async -> String {
+        if let trialData = await self.storage.loadEncrypted(SecureTrialData.self, for: StorageKey.trialData) {
             let daysSince = Calendar.current.dateComponents([.day], from: trialData.startDate, to: Date()).day ?? 0
             return """
             Trial Start: \(trialData.startDate)

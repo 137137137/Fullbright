@@ -84,8 +84,8 @@ final class SecureAuthenticationManager: AuthenticationManaging {
     func start() async {
         let integrityPassed = await integrityChecker.passesAllChecks()
         integrityHasFailed = !integrityPassed
-        let licenseState = licenseManager.checkLicense()
-        let trialState = trialManager.checkTrialStatus()
+        let licenseState = await licenseManager.checkLicense()
+        let trialState = await trialManager.checkTrialStatus()
 
         authState = AuthStateReducer.reduce(
             current: authState,
@@ -125,11 +125,10 @@ final class SecureAuthenticationManager: AuthenticationManaging {
                 guard let self else { return }
                 switch event {
                 case .revokedByServer:
+                    let fallback = await self.trialManager.checkTrialStatus()
                     self.authState = AuthStateReducer.reduce(
                         current: self.authState,
-                        event: .licenseRevokedByServer(
-                            trialFallback: self.trialManager.checkTrialStatus()
-                        )
+                        event: .licenseRevokedByServer(trialFallback: fallback)
                     )
                 }
             }
@@ -155,24 +154,24 @@ final class SecureAuthenticationManager: AuthenticationManaging {
 
     // MARK: - Authentication Status
 
-    func refreshAuthenticationState() {
+    func refreshAuthenticationState() async {
         // Integrity failures are terminal for the session — recomputing
         // from storage would silently undo the .expired penalty.
         guard !integrityHasFailed else { return }
-        if let licenseState = licenseManager.checkLicense() {
+        if let licenseState = await licenseManager.checkLicense() {
             authState = licenseState
             if case .authenticated(let licenseKey) = licenseState {
                 licenseManager.validateLicenseInBackground(licenseKey: licenseKey)
             }
         } else {
-            authState = trialManager.checkTrialStatus()
+            authState = await trialManager.checkTrialStatus()
         }
     }
 
     // MARK: - Trial Management
 
-    func startTrial() {
-        authState = trialManager.startTrial()
+    func startTrial() async {
+        authState = await trialManager.startTrial()
     }
 
     // MARK: - License Management
@@ -197,13 +196,14 @@ final class SecureAuthenticationManager: AuthenticationManaging {
             // Offline grace: `.offline` and `.valid` both stay authenticated.
             // Only an explicit `.invalid` (server revoked the license) expires it.
             if case .invalid = result {
+                let fallback = await trialManager.checkTrialStatus()
                 authState = AuthStateReducer.reduce(
                     current: authState,
-                    event: .licenseRevokedByServer(trialFallback: trialManager.checkTrialStatus())
+                    event: .licenseRevokedByServer(trialFallback: fallback)
                 )
             }
         case .trial:
-            authState = trialManager.checkTrialStatus()
+            authState = await trialManager.checkTrialStatus()
         case .notAuthenticated, .expired:
             break
         }
@@ -211,8 +211,8 @@ final class SecureAuthenticationManager: AuthenticationManaging {
 
     // MARK: - Cleanup
 
-    func logout() {
-        licenseManager.revokeLicense()
+    func logout() async {
+        await licenseManager.revokeLicense()
         authState = AuthStateReducer.reduce(current: authState, event: .loggedOut)
     }
 }

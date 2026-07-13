@@ -329,6 +329,8 @@ struct AppCoordinatorAuthGateTests {
         try await Task.sleep(for: .milliseconds(80))
 
         coordinator.handleOnboardingCompleted()
+        // startTrial is now dispatched onto a Task; let it run.
+        try await Task.sleep(for: .milliseconds(80))
 
         #expect(auth.startTrialCallCount == 1)
     }
@@ -342,6 +344,7 @@ struct AppCoordinatorAuthGateTests {
         try await Task.sleep(for: .milliseconds(80))
 
         coordinator.handleOnboardingCompleted()
+        try await Task.sleep(for: .milliseconds(80))
 
         #expect(auth.startTrialCallCount == 0)
     }

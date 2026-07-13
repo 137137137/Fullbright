@@ -64,7 +64,7 @@ struct SecureAuthenticationManagerTests {
         await manager.start()
         #expect(manager.authState == .expired)
 
-        manager.refreshAuthenticationState()
+        await manager.refreshAuthenticationState()
         #expect(manager.authState == .expired)
     }
 
@@ -99,20 +99,20 @@ struct SecureAuthenticationManagerTests {
         #expect(manager.authState == .trial(daysRemaining: 7, expiryDate: expiry))
     }
 
-    @Test func startTrial_delegatesToTrialManager() {
+    @Test func startTrial_delegatesToTrialManager() async {
         let trial = StubTrialManager()
         let expiry = Date(timeIntervalSinceNow: 86400 * 14)
         trial.nextStartResult = .trial(daysRemaining: 14, expiryDate: expiry)
         let (manager, trial2, _) = makeManager(trial: trial)
-        manager.startTrial()
+        await manager.startTrial()
         #expect(trial2.startCallCount == 1)
         #expect(manager.authState == .trial(daysRemaining: 14, expiryDate: expiry))
     }
 
-    @Test func logout_revokesLicenseAndExpires() {
+    @Test func logout_revokesLicenseAndExpires() async {
         let license = StubLicenseManager()
         let (manager, _, license2) = makeManager(license: license)
-        manager.logout()
+        await manager.logout()
         #expect(license2.revokeCallCount == 1)
         #expect(manager.authState == .expired)
     }

@@ -99,18 +99,18 @@ struct MenuBarContentView: View {
                     NSWorkspace.shared.open(AppURL.sparkleTesting)
                 }
                 Divider()
-                Button("Set Trial: 14 days") { viewModel.debugActions.setTrialDays(14) }
-                Button("Set Trial: 7 days") { viewModel.debugActions.setTrialDays(7) }
-                Button("Set Trial: 3 days") { viewModel.debugActions.setTrialDays(3) }
-                Button("Set Trial: 1 day") { viewModel.debugActions.setTrialDays(1) }
+                Button("Set Trial: 14 days") { Task { await viewModel.debugActions.setTrialDays(14) } }
+                Button("Set Trial: 7 days") { Task { await viewModel.debugActions.setTrialDays(7) } }
+                Button("Set Trial: 3 days") { Task { await viewModel.debugActions.setTrialDays(3) } }
+                Button("Set Trial: 1 day") { Task { await viewModel.debugActions.setTrialDays(1) } }
                 Divider()
-                Button("Expire Trial") { viewModel.debugActions.expireTrial() }
-                Button("Reset Trial") { viewModel.debugActions.resetTrial() }
+                Button("Expire Trial") { Task { await viewModel.debugActions.expireTrial() } }
+                Button("Reset Trial") { Task { await viewModel.debugActions.resetTrial() } }
                 Divider()
-                Button("Activate Test License") { viewModel.debugActions.setValidLicense() }
-                Button("Clear License") { viewModel.debugActions.clearLicense() }
+                Button("Activate Test License") { Task { await viewModel.debugActions.setValidLicense() } }
+                Button("Clear License") { Task { await viewModel.debugActions.clearLicense() } }
                 Divider()
-                Button("Print Debug Info") { viewModel.debugActions.printInfo() }
+                Button("Print Debug Info") { Task { await viewModel.debugActions.printInfo() } }
             }
             .menuBarRowStyle()
             .foregroundStyle(.secondary)
@@ -128,8 +128,8 @@ struct MenuBarContentView: View {
             .menuBarRowStyle()
         }
         .frame(width: MenuBarStyle.popoverWidth)
-        .onAppear {
-            viewModel.refreshAuthIfUnauthenticated()
+        .task {
+            await viewModel.refreshAuthIfUnauthenticated()
         }
     }
 
