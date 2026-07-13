@@ -123,9 +123,7 @@ struct SettingsView: View {
         Section {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Toggle("Automatically check for updates", isOn: $viewModel.automaticallyChecksForUpdates)
-                    .toggleStyle(.switch)
-                    .tint(.accentColor)
+                    Text("Automatically check for updates")
 
                     Text("Checks for updates periodically in the background")
                         .font(.caption)
@@ -137,6 +135,11 @@ struct SettingsView: View {
                 Button("Check Now") {
                     viewModel.checkForUpdates()
                 }
+
+                Toggle("Automatically check for updates", isOn: $viewModel.automaticallyChecksForUpdates)
+                    .toggleStyle(.switch)
+                    .tint(.accentColor)
+                    .labelsHidden()
             }
 
             Toggle("Automatically download updates", isOn: $viewModel.automaticallyDownloadsUpdates)
