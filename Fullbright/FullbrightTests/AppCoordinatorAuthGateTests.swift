@@ -146,6 +146,29 @@ struct AppCoordinatorAuthGateTests {
         #expect(keyManager.intercepting == true)
     }
 
+    @Test("manual XDR toggle drives key interception on and off")
+    func manualToggle_syncsInterception() async throws {
+        let (deps, _, xdr, keyManager) = makeDependencies(
+            authState: .authenticated(licenseKey: "PAID")
+        )
+        // Suppress auto-enable so the manual path is what's exercised.
+        xdr.previousSessionEndedDirty = true
+        let coordinator = AppCoordinator(dependencies: deps)
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(keyManager.intercepting == false)
+
+        // Menu-bar toggle mutates the controller directly, bypassing the
+        // coordinator — interception must follow via observation.
+        _ = xdr.enableXDR()
+        let interceptOn = await waitUntil { keyManager.intercepting == true }
+        #expect(interceptOn)
+
+        _ = xdr.disableXDR(immediate: false)
+        let interceptOff = await waitUntil { keyManager.intercepting == false }
+        #expect(interceptOff)
+        withExtendedLifetime(coordinator) {}
+    }
+
     @Test("unclean previous shutdown suppresses XDR auto-enable")
     func dirtyPreviousSession_suppressesAutoEnable() async throws {
         let (deps, _, xdr, keyManager) = makeDependencies(

@@ -53,6 +53,7 @@ final class StubLaunchAtLoginManager: LaunchAtLoginManaging, @unchecked Sendable
 }
 
 @MainActor
+@Observable
 final class StubXDRController: XDRControlling {
     var isEnabled: Bool = false
     var brightness: Float = 0.5

@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import Observation
 import Sparkle
 import os
 
@@ -45,6 +46,12 @@ final class AppCoordinator {
         // Wire hardware input → XDR controller → OSD. This doesn't depend
         // on auth state so it can happen first.
         osdEventRouter.attach(to: keyManager)
+
+        // Key interception must track the XDR enabled state itself, not
+        // just auth transitions — the menu-bar toggle flips XDR without
+        // going through this coordinator, and stale interception swallows
+        // brightness keys into a no-op (stuck OSD, dead keys).
+        startObservingXDREnabled()
 
         // Initial XDR sync reflects the starting authState (typically
         // .notAuthenticated on first launch). Subsequent transitions
@@ -105,23 +112,46 @@ final class AppCoordinator {
             // hand in it (e.g. the macOS 27 beta display blackout), auto
             // enabling would re-trigger it on every login. The user can
             // still enable manually from the menu bar.
-            guard !xdrController.previousSessionEndedDirty else {
+            if xdrController.previousSessionEndedDirty {
                 logger.warning("Previous session ended dirty — skipping XDR auto-enable; waiting for manual toggle")
-                keyManager.intercepting = false
-                return
+            } else {
+                logger.info("Enabling XDR (supported=\(supported), canUse=\(canUse))")
+                xdrController.enableXDR()
             }
-            logger.info("Enabling XDR (supported=\(supported), canUse=\(canUse))")
-            xdrController.enableXDR()
-            keyManager.intercepting = true
-            keyManager.start()
         } else if enabled && !canUse {
             logger.info("Disabling XDR (canUse=\(canUse))")
             xdrController.disableXDR()
-            keyManager.intercepting = false
+        }
+        syncKeyInterception()
+    }
+
+    /// Single source of truth for brightness-key interception: swallow
+    /// keys exactly while XDR is enabled (and auth allows it). Anything
+    /// else means the native brightness controls must keep working.
+    private func syncKeyInterception() {
+        let shouldIntercept = xdrController.isEnabled && authManager.authState.canUseXDR
+        guard keyManager.intercepting != shouldIntercept else { return }
+        keyManager.intercepting = shouldIntercept
+        if shouldIntercept {
+            keyManager.start()
+        } else {
             keyManager.stop()
-        } else if !canUse {
-            keyManager.intercepting = false
-            keyManager.stop()
+        }
+        logger.info("Brightness-key interception \(shouldIntercept ? "ON" : "OFF", privacy: .public)")
+    }
+
+    /// Re-syncs interception whenever `xdrController.isEnabled` changes,
+    /// regardless of who changed it (menu toggle, gamma-conflict guard,
+    /// auth transition).
+    private func startObservingXDREnabled() {
+        withObservationTracking {
+            _ = xdrController.isEnabled
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.syncKeyInterception()
+                self.startObservingXDREnabled()
+            }
         }
     }
 }
