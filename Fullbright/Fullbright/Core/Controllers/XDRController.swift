@@ -342,7 +342,8 @@ final class XDRController: XDRControlling {
     private func startEngagement() {
         engagementState = .engaging
         let task = Task { @MainActor [weak self] in
-            await self?.runEngagementLoop()
+            guard let self else { return }
+            await self.runEngagementLoop()
         }
         engageTaskLock.withLock { existing in
             existing?.cancel()

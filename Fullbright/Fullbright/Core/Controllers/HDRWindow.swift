@@ -26,7 +26,7 @@ private let hdrStyleMask = NSWindow.StyleMask(rawValue: 0x8000)
 /// linear sRGB, keeping the display's EDR pipeline engaged.
 @MainActor
 private final class EDRTriggerView: MTKView, MTKViewDelegate {
-    private var commandQueue: MTLCommandQueue?
+    private var commandQueue: (any MTLCommandQueue)?
 
     init?(frame: CGRect, edrValue: Double) {
         guard let metalDevice = MTLCreateSystemDefaultDevice(),
