@@ -38,6 +38,9 @@ final class MenuBarViewModel {
     var isXDREnabled: Bool { xdrController.isEnabled }
     var canUseXDR: Bool { authManager.authState.canUseXDR }
     var authState: AuthenticationState { authManager.authState }
+    /// Unified brightness (0 = min, 0.5 = SDR max, 1 = XDR peak).
+    var xdrBrightness: Float { xdrController.brightness }
+    var currentNits: Int { xdrController.currentNits }
 
     // MARK: - Actions
 
@@ -48,6 +51,13 @@ final class MenuBarViewModel {
         } else if !enabled && xdrController.isEnabled {
             _ = xdrController.disableXDR()
         }
+    }
+
+    /// Slider entry point. Gated on auth (active trial or license) — the
+    /// same gate as the XDR toggle — and a no-op while XDR is off.
+    func setXDRBrightness(_ value: Float) {
+        guard canUseXDR else { return }
+        xdrController.adjustBrightness(delta: value - xdrController.brightness)
     }
 
     func quitApp() {

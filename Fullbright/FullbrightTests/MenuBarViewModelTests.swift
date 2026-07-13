@@ -81,6 +81,42 @@ struct MenuBarViewModelTests {
         #expect(xdr.enableCallCount == 1)
     }
 
+    @Test("setXDRBrightness forwards the delta when trial/license allows")
+    func setXDRBrightness_forwardsWhenAllowed() {
+        let xdr = StubXDRController()
+        xdr.isEnabled = true
+        xdr.brightness = 0.5
+        let auth = StubAuthManager()
+        auth.authState = .authenticated(licenseKey: "K")
+        let (vm, _, _, _) = makeViewModel(xdr: xdr, auth: auth)
+
+        vm.setXDRBrightness(0.8)
+        #expect(xdr.adjustBrightnessCalls.count == 1)
+        #expect(abs((xdr.adjustBrightnessCalls.first ?? 0) - 0.3) < 0.0001)
+    }
+
+    @Test("setXDRBrightness is a no-op when the trial is expired")
+    func setXDRBrightness_noOpWhenExpired() {
+        let xdr = StubXDRController()
+        xdr.isEnabled = true
+        let auth = StubAuthManager()
+        auth.authState = .expired
+        let (vm, _, _, _) = makeViewModel(xdr: xdr, auth: auth)
+
+        vm.setXDRBrightness(0.8)
+        #expect(xdr.adjustBrightnessCalls.isEmpty)
+    }
+
+    @Test("xdrBrightness and currentNits mirror the controller")
+    func brightnessAndNits_mirrorController() {
+        let xdr = StubXDRController()
+        xdr.brightness = 0.75
+        xdr.currentNits = 1050
+        let (vm, _, _, _) = makeViewModel(xdr: xdr)
+        #expect(vm.xdrBrightness == 0.75)
+        #expect(vm.currentNits == 1050)
+    }
+
     @Test("setXDREnabled is a no-op when canUseXDR is false")
     func setXDREnabled_noOpWhenNotAllowed() {
         let xdr = StubXDRController()

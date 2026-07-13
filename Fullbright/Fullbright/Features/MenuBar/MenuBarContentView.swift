@@ -34,6 +34,29 @@ struct MenuBarContentView: View {
                 }
                 .padding(.horizontal, MenuBarStyle.horizontalPadding)
                 .padding(.vertical, MenuBarStyle.xdrRowVerticalPadding)
+
+                // Brightness slider — same auth gate as the toggle, and
+                // inert while XDR itself is off.
+                HStack(spacing: 8) {
+                    Image(systemName: "sun.min.fill")
+                        .font(MenuBarStyle.captionFont)
+                        .foregroundStyle(.secondary)
+                    Slider(
+                        value: Binding(
+                            get: { Double(viewModel.xdrBrightness) },
+                            set: { viewModel.setXDRBrightness(Float($0)) }
+                        ),
+                        in: 0...1
+                    )
+                    .controlSize(.small)
+                    .accessibilityLabel("XDR Brightness")
+                    Image(systemName: "sun.max.fill")
+                        .font(MenuBarStyle.captionFont)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, MenuBarStyle.horizontalPadding)
+                .padding(.bottom, MenuBarStyle.xdrRowVerticalPadding)
+                .disabled(!viewModel.canUseXDR || !viewModel.isXDREnabled)
             } else {
                 Text("No XDR Display Detected")
                     .font(MenuBarStyle.bodyFont)
