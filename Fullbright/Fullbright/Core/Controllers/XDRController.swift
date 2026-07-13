@@ -118,6 +118,9 @@ final class XDRController: XDRControlling {
     private var hdrWindow: NSWindow?
     private var nightShiftWasEnabled = false
     private var brightnessBeforeXDR: Float = 0.8
+    /// Linear luminance fraction at enable time; the disable fade lands
+    /// here before the backlight is restored.
+    private var luminanceBeforeXDR: Float = 0.8
     /// Set on the first successful engage after enableXDR so re-engages
     /// (wake, headroom loss) don't re-jump the user's brightness to peak.
     private var hasReachedPeakThisEnable = false
@@ -133,8 +136,15 @@ final class XDRController: XDRControlling {
     @ObservationIgnored
     private let engageTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
 
+    /// Pending smooth-disable teardown. If the app dies mid-fade, the
+    /// dirty flag (cleared only in completeTeardown) restores gamma on
+    /// next launch.
+    @ObservationIgnored
+    private let teardownTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+
     nonisolated deinit {
         engageTaskLock.withLock { $0?.cancel() }
+        teardownTaskLock.withLock { $0?.cancel() }
     }
 
     private let supported: Bool
@@ -182,7 +192,9 @@ final class XDRController: XDRControlling {
         self.gammaManager.onPersistentGammaConflict = { [weak self] in
             guard let self, self.isEnabled else { return }
             logger.error("Persistent gamma conflict — disabling XDR")
-            self.disableXDR()
+            // Immediate: gamma writes aren't sticking, so fading is moot.
+            self.disableXDR(immediate: true)
+            NotificationCenter.default.post(name: .fullbrightGammaConflict, object: nil)
         }
 
         lifecycleObserver.onScreensSleep = { [weak self] in self?.handleScreensSleep() }
@@ -199,6 +211,16 @@ final class XDRController: XDRControlling {
     func enableXDR() -> Bool {
         guard supported, !isEnabled else { return supported && isEnabled }
 
+        // A smooth disable may still be mid-fade; finish it now so the
+        // enable sequence starts from a fully restored display.
+        if let pending = teardownTaskLock.withLock({ task -> Task<Void, Never>? in
+            defer { task = nil }
+            return task
+        }) {
+            pending.cancel()
+            completeTeardown()
+        }
+
         brightnessBeforeXDR = displayServices.getBrightness(displayID)
 
         // Luminance fraction the user currently sees, used to hold
@@ -207,6 +229,7 @@ final class XDRController: XDRControlling {
         // when the linear symbol is unavailable.
         let linear = displayServices.getLinearBrightness(displayID)
         let luminanceFraction = linear ?? (brightnessBeforeXDR * brightnessBeforeXDR)
+        luminanceBeforeXDR = luminanceFraction
         let softwareFloor = gammaManager.softwareBrightness(from: 0.0)
         let compensation = min(1.0, max(softwareFloor, luminanceFraction))
 
@@ -254,10 +277,42 @@ final class XDRController: XDRControlling {
     }
 
     @discardableResult
-    func disableXDR() -> Bool {
+    func disableXDR(immediate: Bool) -> Bool {
         guard isEnabled else { return false }
 
         stopEngagement()
+        isEnabled = false
+
+        let fadeDuration = timing.brightnessFadeDuration
+        if immediate || fadeDuration <= 0 {
+            completeTeardown()
+            return true
+        }
+
+        // Ease the boosted gamma back to the pre-XDR luminance before
+        // yanking ColorSync and the backlight — the mirror of the enable
+        // flash guard. The dirty flag stays set until teardown completes,
+        // so a crash mid-fade still restores on next launch.
+        let softwareFloor = gammaManager.softwareBrightness(from: 0.0)
+        let landing = min(1.0, max(softwareFloor, luminanceBeforeXDR))
+        gammaManager.fadeToSoftwareBrightness(landing, displayID: displayID, duration: fadeDuration)
+
+        let task = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(fadeDuration) + .milliseconds(50))
+            guard !Task.isCancelled, let self else { return }
+            self.teardownTaskLock.withLock { $0 = nil }
+            self.completeTeardown()
+        }
+        teardownTaskLock.withLock { existing in
+            existing?.cancel()
+            existing = task
+        }
+        return true
+    }
+
+    /// The synchronous tail of disable: restore ColorSync/Night Shift/ALC/
+    /// backlight, drop the HDR window, clear the dirty flag.
+    private func completeTeardown() {
         gammaManager.stopGammaActivity()
 
         // Step 1: Restore gamma
@@ -283,10 +338,8 @@ final class XDRController: XDRControlling {
         hdrWindow?.orderOut(nil)
         hdrWindow = nil
 
-        isEnabled = false
         gammaManager.resetLogging()
         dirtyFlagStore.isDirty = false
-        return true
     }
 
     /// Adjust unified brightness. Called from brightness key handler.

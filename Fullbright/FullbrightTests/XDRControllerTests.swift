@@ -88,10 +88,13 @@ struct XDRControllerTests {
         var value = 0
     }
 
-    /// Polls `condition` until it holds or the timeout elapses.
+    /// Polls `condition` until it holds or the timeout elapses. The
+    /// timeout is generous because the whole suite runs concurrently on
+    /// the main actor — synchronous crypto/keychain tests can starve
+    /// these polls for seconds at a time.
     @discardableResult
     private func waitUntil(
-        timeoutMs: Int = 2000,
+        timeoutMs: Int = 10000,
         _ condition: @MainActor () -> Bool
     ) async -> Bool {
         let clock = ContinuousClock()
@@ -442,6 +445,79 @@ struct XDRControllerTests {
         try? await Task.sleep(for: .milliseconds(80))
         #expect(h.gamma.fadeCalls.count == fadesAfterDisable)
         #expect(h.controller.engagementState == .idle)
+    }
+
+    // MARK: - Smooth disable
+
+    /// Timing with a real (small) fade so the smooth-disable path runs.
+    static let smoothTiming = XDRTiming(
+        engagePollInterval: .milliseconds(5),
+        engageTimeout: .milliseconds(80),
+        retryCooldown: .milliseconds(40),
+        monitorInterval: .milliseconds(10),
+        brightnessFadeDuration: 0.05,
+        keyFadeDuration: 0
+    )
+
+    @Test("smooth disable fades gamma down before restoring the backlight")
+    func disable_smooth_fadesBeforeRestore() async {
+        let ds = StubDisplayServices()
+        ds.storedBrightness = 0.65
+        ds.storedLinearBrightness = 0.4
+        let h = makeHarness(displayServices: ds, timing: Self.smoothTiming)
+        _ = h.controller.enableXDR()
+        #expect(ds.storedBrightness == 1.0)
+
+        h.gamma.fadeCalls.removeAll()
+        _ = h.controller.disableXDR()
+
+        // Immediately after: XDR reads as off, the fade toward the pre-XDR
+        // luminance has started, but the backlight/dirty-flag teardown has
+        // not happened yet.
+        #expect(h.controller.isEnabled == false)
+        #expect(h.gamma.fadeCalls.last?.target == 0.4)
+        #expect(ds.storedBrightness == 1.0)
+        #expect(h.dirtyStore.isDirty == true)
+
+        // After the fade window, the full teardown lands.
+        let restored = await waitUntil { ds.storedBrightness == 0.65 }
+        #expect(restored)
+        #expect(h.dirtyStore.isDirty == false)
+    }
+
+    @Test("immediate disable tears down synchronously")
+    func disable_immediate_isSynchronous() {
+        let ds = StubDisplayServices()
+        ds.storedBrightness = 0.65
+        let h = makeHarness(displayServices: ds, timing: Self.smoothTiming)
+        _ = h.controller.enableXDR()
+
+        _ = h.controller.disableXDR(immediate: true)
+        #expect(ds.storedBrightness == 0.65)
+        #expect(h.dirtyStore.isDirty == false)
+    }
+
+    @Test("re-enabling during a smooth disable completes the teardown first, then enables")
+    func disable_thenQuickReenable_isConsistent() async {
+        let ds = StubDisplayServices()
+        ds.storedBrightness = 0.65
+        let h = makeHarness(displayServices: ds, timing: Self.smoothTiming)
+        _ = h.controller.enableXDR()
+
+        _ = h.controller.disableXDR()
+        #expect(h.controller.isEnabled == false)
+        _ = h.controller.enableXDR()
+
+        #expect(h.controller.isEnabled == true)
+        #expect(ds.storedBrightness == 1.0)
+        #expect(h.dirtyStore.isDirty == true)
+
+        // The cancelled teardown must not fire later and yank the display
+        // out from under the re-enabled session.
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(h.controller.isEnabled == true)
+        #expect(ds.storedBrightness == 1.0)
+        #expect(h.dirtyStore.isDirty == true)
     }
 
     // MARK: - Gamma conflict escalation

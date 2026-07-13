@@ -32,7 +32,7 @@ private final class MutableIntegrityChecker: IntegrityChecking, @unchecked Senda
 @MainActor
 private func waitUntil(
     _ condition: @MainActor () -> Bool,
-    timeout: Duration = .seconds(2)
+    timeout: Duration = .seconds(10)
 ) async -> Bool {
     let start = ContinuousClock.now
     while ContinuousClock.now - start < timeout {

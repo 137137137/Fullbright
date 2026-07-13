@@ -41,6 +41,13 @@ struct MenuBarViewModelTests {
         #expect(lifecycle.terminateCallCount == 1)
     }
 
+    @Test("activateApp delegates to AppLifecycle.activate")
+    func activateApp_callsLifecycle() {
+        let (vm, _, _, lifecycle) = makeViewModel()
+        vm.activateApp()
+        #expect(lifecycle.activateCallCount == 1)
+    }
+
     @Test("isXDRSupported reflects the underlying XDRControlling")
     func isXDRSupported_reflectsController() {
         let xdr = StubXDRController()

@@ -80,7 +80,9 @@ final class AppCoordinator {
 
     func prepareForTermination() {
         if xdrController.isEnabled {
-            xdrController.disableXDR()
+            // Immediate: the process is about to exit, there is no time
+            // for the smooth disable fade.
+            xdrController.disableXDR(immediate: true)
             keyManager.intercepting = false
         }
     }

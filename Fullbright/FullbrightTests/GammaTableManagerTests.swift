@@ -91,9 +91,11 @@ struct GammaTableManagerTests {
         return (manager, store)
     }
 
+    // Generous timeout: the suite runs concurrently on the main actor and
+    // synchronous crypto/keychain tests can starve these polls for seconds.
     @discardableResult
     private func waitUntil(
-        timeoutMs: Int = 2000,
+        timeoutMs: Int = 10000,
         _ condition: @MainActor () -> Bool
     ) async -> Bool {
         let clock = ContinuousClock()

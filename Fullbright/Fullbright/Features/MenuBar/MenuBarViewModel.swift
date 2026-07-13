@@ -54,6 +54,13 @@ final class MenuBarViewModel {
         appLifecycle.terminate()
     }
 
+    /// Bring the app (and whatever window was just opened) to the front.
+    /// Required for windows opened from the menu bar — accessory apps
+    /// otherwise open them behind the active app.
+    func activateApp() {
+        appLifecycle.activate()
+    }
+
     func refreshAuthIfUnauthenticated() {
         switch authManager.authState {
         case .notAuthenticated, .expired:

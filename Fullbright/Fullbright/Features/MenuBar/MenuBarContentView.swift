@@ -50,7 +50,10 @@ struct MenuBarContentView: View {
             Divider()
 
             // Settings button
-            Button(action: { openSettings() }) {
+            Button(action: {
+                openSettings()
+                viewModel.activateApp()
+            }) {
                 HStack {
                     Image(systemName: "gearshape")
                     Text("Settings...")

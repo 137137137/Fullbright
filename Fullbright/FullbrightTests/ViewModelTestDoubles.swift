@@ -13,7 +13,9 @@ import os
 @MainActor
 final class StubAppLifecycle: AppLifecycle {
     private(set) var terminateCallCount = 0
+    private(set) var activateCallCount = 0
     func terminate() { terminateCallCount += 1 }
+    func activate() { activateCallCount += 1 }
 }
 
 @MainActor
@@ -68,7 +70,7 @@ final class StubXDRController: XDRControlling {
     }
 
     @discardableResult
-    func disableXDR() -> Bool {
+    func disableXDR(immediate: Bool) -> Bool {
         disableCallCount += 1
         isEnabled = false
         return true

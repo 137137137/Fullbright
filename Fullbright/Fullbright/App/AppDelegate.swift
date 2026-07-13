@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var coordinator: AppCoordinator?
     private var onboardingWindowController: OnboardingWindowController?
     private var signalSources: [any DispatchSourceSignal] = []
+    private var gammaConflictObserver: (any NSObjectProtocol)?
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
@@ -18,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // string because the selector isn't exposed by any Swift type;
             // the single-paren form is the standard spelling.
             NSApp.sendAction(NSSelectorFromString("showSettingsWindow:"), to: nil, from: nil)
+            DefaultAppLifecycle().activate()
         }
         return true
     }
@@ -43,6 +45,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         installGracefulShutdownHandlers()
+
+        // Surface gamma conflicts (XDR silently turning itself off would
+        // otherwise read as "the app is broken").
+        gammaConflictObserver = NotificationCenter.default.addObserver(
+            forName: .fullbrightGammaConflict, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                GammaConflictReporter.showConflictAlert()
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -88,5 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.coordinator?.handleOnboardingCompleted()
         })
         onboardingWindowController?.showWindow(nil)
+        onboardingWindowController?.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate()
     }
 }

@@ -59,6 +59,14 @@ enum DebugConstants {
 }
 #endif
 
+// MARK: - Notifications
+
+extension Notification.Name {
+    /// Posted when XDR is force-disabled because gamma writes repeatedly
+    /// failed to stick (another gamma app, or a broken macOS gamma API).
+    static let fullbrightGammaConflict = Notification.Name("fullbright.gammaConflict")
+}
+
 // MARK: - Window Dimensions
 
 enum WindowSize {
