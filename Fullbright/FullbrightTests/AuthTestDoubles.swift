@@ -10,7 +10,7 @@ import os
 final class InMemoryKeychain: KeychainProviding, @unchecked Sendable {
     private let lock = OSAllocatedUnfairLock<[String: Data]>(initialState: [:])
 
-    func save(_ data: Data, for key: String) throws {
+    func save(_ data: Data, for key: String) throws(KeychainError) {
         lock.withLock { $0[key] = data }
     }
 
@@ -18,7 +18,7 @@ final class InMemoryKeychain: KeychainProviding, @unchecked Sendable {
         lock.withLock { $0[key] }
     }
 
-    func delete(for key: String) throws {
+    func delete(for key: String) throws(KeychainError) {
         lock.withLock { _ = $0.removeValue(forKey: key) }
     }
 }

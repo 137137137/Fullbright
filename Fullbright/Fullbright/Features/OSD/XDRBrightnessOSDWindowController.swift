@@ -173,12 +173,6 @@ final class XDRBrightnessOSDWindowController: OSDShowing {
         self.xdrController = xdrController
     }
 
-    private static let nitsFormatter: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        return f
-    }()
-
     private let osdState = XDRBrightnessOSDState()
     private var window: XDRBrightnessOSDWindow?
 
@@ -206,7 +200,7 @@ final class XDRBrightnessOSDWindowController: OSDShowing {
         osdState.tip = tip
 
         let nits = xdrController.currentNits
-        let nitsText = "\(Self.nitsFormatter.string(from: NSNumber(value: nits)) ?? "\(nits)") nits"
+        let nitsText = "\(nits.formatted(.number)) nits"
         osdState.text = text ?? nitsText
         let rangeText = nits > Int(BrightnessNitsConverter.sdrMaxNits) ? "Display (XDR Range)" : "Display (SDR Range)"
         osdState.leadingLabel = leadingLabel ?? rangeText

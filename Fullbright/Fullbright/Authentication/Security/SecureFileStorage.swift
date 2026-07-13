@@ -242,7 +242,7 @@ final class SecureFileStorage: SecureStorageProviding {
         do {
             let sealedBox = try AES.GCM.seal(data, using: derivedKey)
             guard let combined = sealedBox.combined else {
-                throw EncryptionError.encryptionFailed(underlying: NSError(domain: "Fullbright", code: -1, userInfo: [NSLocalizedDescriptionKey: "SealedBox.combined returned nil"]))
+                throw EncryptionError.combinedRepresentationUnavailable
             }
             return combined
         } catch let error as EncryptionError {

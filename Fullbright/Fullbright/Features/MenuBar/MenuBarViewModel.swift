@@ -19,6 +19,10 @@ final class MenuBarViewModel {
     private let appLifecycle: any AppLifecycle
     let updaterController: SPUStandardUpdaterController
 
+    /// Owned once here so the popover doesn't mint a fresh view model (and a
+    /// fresh KVO observation + Task) on every `body` evaluation.
+    let checkForUpdatesViewModel: CheckForUpdatesViewModel
+
     init(xdrController: any XDRControlling,
          authManager: any AuthenticationManaging,
          updaterController: SPUStandardUpdaterController,
@@ -27,6 +31,7 @@ final class MenuBarViewModel {
         self.authManager = authManager
         self.updaterController = updaterController
         self.appLifecycle = appLifecycle
+        self.checkForUpdatesViewModel = CheckForUpdatesViewModel(updater: updaterController.updater)
         #if DEBUG
         self.debugActions = DebugAuthActions(authManager: authManager)
         #endif

@@ -129,22 +129,22 @@ final class XDRController: XDRControlling {
     private var hasUserAdjustedSinceEnable = false
     private var lastObservedHeadroom: Double = 1.0
 
-    /// The engagement task spawned by enableXDR. Wrapped in a lock so the
-    /// `nonisolated deinit` can cancel it even though the controller is
-    /// MainActor-isolated. Without this, releasing the singleton (e.g. in
-    /// tests) leaks a running Task until its next sleep tick.
+    /// The engagement task spawned by enableXDR. A `nonisolated deinit` can
+    /// cancel a MainActor-isolated `Task` property directly (Task is
+    /// Sendable), so releasing the singleton (e.g. in tests) tears down the
+    /// running loop without leaking it until its next sleep tick.
     @ObservationIgnored
-    private let engageTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    private var engageTask: Task<Void, Never>?
 
     /// Pending smooth-disable teardown. If the app dies mid-fade, the
     /// dirty flag (cleared only in completeTeardown) restores gamma on
     /// next launch.
     @ObservationIgnored
-    private let teardownTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    private var teardownTask: Task<Void, Never>?
 
     nonisolated deinit {
-        engageTaskLock.withLock { $0?.cancel() }
-        teardownTaskLock.withLock { $0?.cancel() }
+        engageTask?.cancel()
+        teardownTask?.cancel()
     }
 
     private let supported: Bool
@@ -217,10 +217,8 @@ final class XDRController: XDRControlling {
 
         // A smooth disable may still be mid-fade; finish it now so the
         // enable sequence starts from a fully restored display.
-        if let pending = teardownTaskLock.withLock({ task -> Task<Void, Never>? in
-            defer { task = nil }
-            return task
-        }) {
+        if let pending = teardownTask {
+            teardownTask = nil
             pending.cancel()
             completeTeardown()
         }
@@ -301,15 +299,12 @@ final class XDRController: XDRControlling {
         let landing = min(1.0, max(softwareFloor, luminanceBeforeXDR))
         gammaManager.fadeToSoftwareBrightness(landing, displayID: displayID, duration: fadeDuration)
 
-        let task = Task { @MainActor [weak self] in
+        teardownTask?.cancel()
+        teardownTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(fadeDuration) + .milliseconds(50))
             guard !Task.isCancelled, let self else { return }
-            self.teardownTaskLock.withLock { $0 = nil }
+            self.teardownTask = nil
             self.completeTeardown()
-        }
-        teardownTaskLock.withLock { existing in
-            existing?.cancel()
-            existing = task
         }
         return true
     }
@@ -431,21 +426,16 @@ final class XDRController: XDRControlling {
 
     private func startEngagement() {
         engagementState = .engaging
-        let task = Task { @MainActor [weak self] in
+        engageTask?.cancel()
+        engageTask = Task { @MainActor [weak self] in
             guard let self else { return }
             await self.runEngagementLoop()
-        }
-        engageTaskLock.withLock { existing in
-            existing?.cancel()
-            existing = task
         }
     }
 
     private func stopEngagement() {
-        engageTaskLock.withLock { existing in
-            existing?.cancel()
-            existing = nil
-        }
+        engageTask?.cancel()
+        engageTask = nil
         engagementState = .idle
     }
 

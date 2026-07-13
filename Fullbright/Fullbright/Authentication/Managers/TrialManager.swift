@@ -45,11 +45,12 @@ final class TrialManager: TrialManaging {
         self.eventsContinuation = continuation
     }
 
-    /// See LicenseManager.validationTaskLock for the rationale.
-    private let confirmationTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    /// A `nonisolated deinit` cancels this MainActor-isolated `Task`
+    /// property directly (Task is Sendable).
+    private var confirmationTask: Task<Void, Never>?
 
     nonisolated deinit {
-        confirmationTaskLock.withLock { $0?.cancel() }
+        confirmationTask?.cancel()
         eventsContinuation.finish()
     }
 
@@ -154,7 +155,8 @@ final class TrialManager: TrialManaging {
         guard !trialData.confirmed else { return }
 
         let continuation = self.eventsContinuation
-        let task = Task { @MainActor [weak self] in
+        confirmationTask?.cancel()
+        confirmationTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let result = await self.serverClient.registerTrial(deviceId: trialData.deviceId)
             switch result {
@@ -180,10 +182,6 @@ final class TrialManager: TrialManaging {
             case .offline:
                 break
             }
-        }
-        confirmationTaskLock.withLock { existing in
-            existing?.cancel()
-            existing = task
         }
     }
 

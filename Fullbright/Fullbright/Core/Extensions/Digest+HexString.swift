@@ -11,6 +11,13 @@ import CryptoKit
 extension Digest {
     /// Lowercase hex string representation of the digest bytes.
     var hexString: String {
-        map { String(format: "%02x", $0) }.joined()
+        let hexDigits = Array("0123456789abcdef".utf8)
+        var chars: [UInt8] = []
+        chars.reserveCapacity(Self.byteCount * 2)
+        for byte in self {
+            chars.append(hexDigits[Int(byte >> 4)])
+            chars.append(hexDigits[Int(byte & 0x0f)])
+        }
+        return String(decoding: chars, as: UTF8.self)
     }
 }

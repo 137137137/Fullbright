@@ -28,21 +28,23 @@ protocol IntegrityMonitoring: AnyObject {
 final class IntegrityMonitor: IntegrityMonitoring {
     private let checker: any IntegrityChecking
 
-    /// See SecureAuthenticationManager.integrityCheckTaskLock for the
-    /// rationale behind wrapping a Task in OSAllocatedUnfairLock.
-    private let taskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    /// A `nonisolated deinit` can cancel this MainActor-isolated `Task`
+    /// property directly (Task is Sendable), so the loop is torn down from
+    /// any context, including during deinit.
+    private var task: Task<Void, Never>?
 
     init(checker: any IntegrityChecking) {
         self.checker = checker
     }
 
     nonisolated deinit {
-        taskLock.withLock { $0?.cancel() }
+        task?.cancel()
     }
 
     func start(interval: Duration, onFailure: @MainActor @Sendable @escaping () async -> Void) {
         let checker = self.checker
-        let task = Task { @MainActor in
+        task?.cancel()
+        task = Task { @MainActor in
             while !Task.isCancelled {
                 do {
                     try await Task.sleep(for: interval)
@@ -55,16 +57,10 @@ final class IntegrityMonitor: IntegrityMonitoring {
                 }
             }
         }
-        taskLock.withLock { existing in
-            existing?.cancel()
-            existing = task
-        }
     }
 
     func stop() {
-        taskLock.withLock { existing in
-            existing?.cancel()
-            existing = nil
-        }
+        task?.cancel()
+        task = nil
     }
 }

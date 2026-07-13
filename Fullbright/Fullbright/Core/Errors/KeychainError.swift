@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum KeychainError: Error, LocalizedError {
+enum KeychainError: LocalizedError, Sendable {
     case saveFailed(status: OSStatus)
     case deleteFailed(status: OSStatus)
 

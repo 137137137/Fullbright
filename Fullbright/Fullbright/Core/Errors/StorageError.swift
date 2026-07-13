@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum StorageError: Error, LocalizedError {
+enum StorageError: LocalizedError {
     case encodingFailed(underlying: any Error)
     case decodingFailed(underlying: any Error)
     case saveFailed(underlying: any Error)

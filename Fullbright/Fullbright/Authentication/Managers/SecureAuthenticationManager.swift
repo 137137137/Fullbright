@@ -47,20 +47,14 @@ final class SecureAuthenticationManager: AuthenticationManaging {
     // Interval between background integrity + state re-validation ticks.
     private static let monitoringInterval: Duration = .seconds(300)
 
-    @ObservationIgnored
-    private let integrityCheckTaskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
-
     /// Tasks observing `licenseManager.events` and `trialManager.events`.
-    /// Wrapped in a lock so `nonisolated deinit` can cancel them safely.
+    /// A `nonisolated deinit` cancels these MainActor-isolated `Task`
+    /// properties directly (Task is Sendable).
     @ObservationIgnored
-    private let eventObserverTasksLock = OSAllocatedUnfairLock<[Task<Void, Never>]>(initialState: [])
+    private var eventObserverTasks: [Task<Void, Never>] = []
 
     nonisolated deinit {
-        integrityCheckTaskLock.withLock { $0?.cancel() }
-        eventObserverTasksLock.withLock { tasks in
-            for task in tasks { task.cancel() }
-            tasks = []
-        }
+        for task in eventObserverTasks { task.cancel() }
     }
 
     /// All dependencies are required — no fallback construction.
@@ -154,11 +148,9 @@ final class SecureAuthenticationManager: AuthenticationManaging {
             }
         }
 
-        eventObserverTasksLock.withLock { tasks in
-            // Cancel any tasks left from a previous start().
-            for task in tasks { task.cancel() }
-            tasks = [licenseTask, trialTask]
-        }
+        // Cancel any tasks left from a previous start().
+        for task in eventObserverTasks { task.cancel() }
+        eventObserverTasks = [licenseTask, trialTask]
     }
 
     // MARK: - Authentication Status

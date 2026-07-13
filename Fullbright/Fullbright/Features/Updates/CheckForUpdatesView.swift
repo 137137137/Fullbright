@@ -13,10 +13,6 @@ struct CheckForUpdatesView: View {
     // updater changes on subsequent renders.
     let viewModel: CheckForUpdatesViewModel
 
-    init(viewModel: CheckForUpdatesViewModel) {
-        self.viewModel = viewModel
-    }
-
     var body: some View {
         Button(action: viewModel.checkForUpdates) {
             HStack {

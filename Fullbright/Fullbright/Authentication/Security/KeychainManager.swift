@@ -15,7 +15,7 @@ final class KeychainManager: Sendable, KeychainProviding {
 
     // MARK: - Keychain Operations
 
-    func save(_ data: Data, for key: String) throws {
+    func save(_ data: Data, for key: String) throws(KeychainError) {
         // Delete any existing item first
         try? delete(for: key)
 
@@ -43,7 +43,7 @@ final class KeychainManager: Sendable, KeychainProviding {
         return nil
     }
 
-    func delete(for key: String) throws {
+    func delete(for key: String) throws(KeychainError) {
         let query = baseQuery(for: key)
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {

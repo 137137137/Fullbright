@@ -9,6 +9,7 @@ import Sparkle
 struct SettingsView: View {
     @Bindable var viewModel: SettingsViewModel
     private let appVersion = Bundle.main.appVersion
+    private static let currentYear = Calendar.current.component(.year, from: .now)
 
     var body: some View {
         Form {
@@ -161,7 +162,7 @@ struct SettingsView: View {
             }
 
             HStack {
-                Text("© \(Calendar.current.component(.year, from: Date())) Fullbright")
+                Text("© \(Self.currentYear) Fullbright")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()

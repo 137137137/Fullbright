@@ -2,25 +2,19 @@
 //  AuthStateObserver.swift
 //  Fullbright
 //
-//  Wraps the `withObservationTracking` loop that fires when the
-//  authentication manager's `authState` changes. Extracted from
-//  AppCoordinator so the observation mechanic can be tested in isolation
-//  and substituted with a different implementation if @Observable ever
-//  exposes a first-class observation API.
+//  Bridges the authentication manager's `@Observable` `authState` into a
+//  transition callback using the first-class `Observations` async sequence
+//  (macOS 26+). Extracted from AppCoordinator so the observation mechanic
+//  can be tested in isolation.
 //
 
 import Foundation
-import os
+import Observation
 
 @MainActor
 protocol AuthStateObserving: AnyObject {
     /// Begins observing `authManager.authState`. The callback fires once per
     /// distinct transition — the initial state does NOT trigger it.
-    ///
-    /// Async so callers (and tests) can guarantee the first observation
-    /// registration has completed before they mutate state; otherwise a
-    /// write landing before the Task body reaches `withObservationTracking`
-    /// would be silently missed.
     func start(onTransition: @MainActor @Sendable @escaping (AuthenticationState) -> Void) async
     func stop()
 }
@@ -28,57 +22,37 @@ protocol AuthStateObserving: AnyObject {
 @MainActor
 final class AuthStateObserver: AuthStateObserving {
     private let authManager: any AuthenticationManaging
-    private let taskLock = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
+    private var task: Task<Void, Never>?
 
     init(authManager: any AuthenticationManaging) {
         self.authManager = authManager
     }
 
     nonisolated deinit {
-        taskLock.withLock { $0?.cancel() }
+        task?.cancel()
     }
 
     func start(onTransition: @MainActor @Sendable @escaping (AuthenticationState) -> Void) async {
         let authManager = self.authManager
-        // Handshake: the Task body signals via this continuation as soon as
-        // its first `withObservationTracking` registration is installed.
-        // `start()` doesn't return until that signal arrives, so any state
-        // mutation the caller makes after `start()` is guaranteed to be seen.
-        await withCheckedContinuation { (ready: CheckedContinuation<Void, Never>) in
-            let task = Task { @MainActor in
-                var lastState = authManager.authState
-                var didSignalReady = false
-                while !Task.isCancelled {
-                    await withCheckedContinuation { (changeContinuation: CheckedContinuation<Void, Never>) in
-                        withObservationTracking {
-                            _ = authManager.authState
-                        } onChange: {
-                            changeContinuation.resume()
-                        }
-                        if !didSignalReady {
-                            didSignalReady = true
-                            ready.resume()
-                        }
-                    }
-                    guard !Task.isCancelled else { return }
-                    let newState = authManager.authState
-                    if newState != lastState {
-                        onTransition(newState)
-                        lastState = newState
-                    }
+        // Snapshot the state synchronously so any transition that lands
+        // between now and the first `Observations` element is still reported:
+        // the snapshot — not the first delivered element — is the baseline.
+        let baseline = authManager.authState
+        task?.cancel()
+        task = Task { @MainActor in
+            var lastState = baseline
+            for await state in Observations({ authManager.authState }) {
+                guard !Task.isCancelled else { return }
+                if state != lastState {
+                    onTransition(state)
+                    lastState = state
                 }
-            }
-            taskLock.withLock { existing in
-                existing?.cancel()
-                existing = task
             }
         }
     }
 
     func stop() {
-        taskLock.withLock { existing in
-            existing?.cancel()
-            existing = nil
-        }
+        task?.cancel()
+        task = nil
     }
 }

@@ -15,5 +15,7 @@ final class XDRBrightnessOSDState {
     var leadingLabel = ""
     var locked = false
     var tip: String?
-    var onChange: ((Float) -> Void)?
+    /// A callback, not render state — exclude it from observation so
+    /// reassigning it (e.g. in `show()`) doesn't invalidate the view.
+    @ObservationIgnored var onChange: ((Float) -> Void)?
 }

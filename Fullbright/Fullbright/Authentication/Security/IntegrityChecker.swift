@@ -13,25 +13,21 @@ struct IntegrityChecker: IntegrityChecking, Sendable {
     init() {}
 
     /// Returns true if all integrity checks pass (bundle ID, code signature, debugger).
-    /// SecStaticCodeCheckValidity is synchronous and can take tens of
-    /// milliseconds on first call, so we offload it to a utility-priority
-    /// detached task to keep the main actor responsive during launch.
+    /// This is a `nonisolated async` method, so it runs on the concurrent
+    /// executor — off the main actor — and the synchronous, tens-of-ms
+    /// `SecStaticCodeCheckValidity` call doesn't stall launch. No explicit
+    /// `Task.detached` is needed to leave the main actor.
     func passesAllChecks() async -> Bool {
-        await Task.detached(priority: .utility) {
-            guard Bundle.main.bundleIdentifier == AppIdentifier.expectedBundleIdentifier else {
-                return false
-            }
-
-            if !Self.isCodeSignatureValid() {
-                return false
-            }
-
-            if Self.isBeingDebugged() && !Self.isDebugBuild() {
-                return false
-            }
-
-            return true
-        }.value
+        guard Bundle.main.bundleIdentifier == AppIdentifier.expectedBundleIdentifier else {
+            return false
+        }
+        if !Self.isCodeSignatureValid() {
+            return false
+        }
+        if Self.isBeingDebugged() && !Self.isDebugBuild() {
+            return false
+        }
+        return true
     }
 
     // MARK: - Code Signature
