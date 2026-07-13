@@ -20,15 +20,24 @@ struct DefaultAppLifecycle: AppLifecycle {
     func activate() {
         NSApp.activate()
         // The window being opened (e.g. the SwiftUI Settings scene) is
-        // created on a later runloop turn, and accessory apps don't get
-        // automatic key-window promotion — raise it explicitly once it
-        // exists. The OSD/HDR overlays are panels/borderless and can't
-        // become key, so they never match.
-        DispatchQueue.main.async {
-            let window = NSApp.windows.first { $0.identifier?.rawValue.contains("Settings") == true }
-                ?? NSApp.windows.first { $0.canBecomeKey && $0.isVisible && !($0 is NSPanel) }
-            window?.makeKeyAndOrderFront(nil)
-            window?.orderFrontRegardless()
+        // created on a later runloop turn — sometimes several — and
+        // accessory apps don't get automatic key-window promotion, so
+        // without an explicit raise it can sit hidden behind every other
+        // app. Poll briefly until it exists, then force it front
+        // (orderFrontRegardless works even when macOS denies cooperative
+        // activation). The OSD/HDR overlays are panels/borderless and
+        // can't become key, so they never match.
+        Task { @MainActor in
+            for _ in 0..<20 {
+                let window = NSApp.windows.first { $0.identifier?.rawValue.contains("Settings") == true }
+                    ?? NSApp.windows.first { $0.canBecomeKey && $0.isVisible && !($0 is NSPanel) }
+                if let window {
+                    window.makeKeyAndOrderFront(nil)
+                    window.orderFrontRegardless()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
         }
     }
 }
