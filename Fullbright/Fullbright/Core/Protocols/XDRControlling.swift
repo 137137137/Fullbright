@@ -14,6 +14,14 @@ protocol XDRControlling: AnyObject {
     var currentNits: Int { get }
 
     var isXDRSupported: Bool { get }
+
+    /// True when the previous session ended without restoring the display
+    /// (crash, power-button reset). Used to suppress automatic XDR
+    /// enabling for this session — if XDR contributed to the bad exit,
+    /// auto-enabling would re-trigger it on every login. Manual enabling
+    /// still works.
+    var previousSessionEndedDirty: Bool { get }
+
     @discardableResult func enableXDR() -> Bool
 
     /// Turn XDR off. The default (non-immediate) path eases the boosted

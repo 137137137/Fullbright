@@ -39,6 +39,11 @@ struct SkyLightDisplayConfigurator: DisplayConfiguring {
             _ = slsConfigure(cfg, mode, 1)
         }
 
-        _ = CGCompleteDisplayConfiguration(cfg, .permanently)
+        // `.forSession`, NOT `.permanently`: this reconfigure uses
+        // undocumented SkyLight semantics, and on macOS 27 betas the
+        // display pipeline has blacked out shortly after launch. A
+        // session-scoped configuration guarantees a reboot always returns
+        // the display to a known-good state.
+        _ = CGCompleteDisplayConfiguration(cfg, .forSession)
     }
 }

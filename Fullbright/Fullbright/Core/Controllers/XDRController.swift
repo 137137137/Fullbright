@@ -148,6 +148,9 @@ final class XDRController: XDRControlling {
     }
 
     private let supported: Bool
+    /// Captured before anything clears the dirty flag: the previous
+    /// session died without restoring the display.
+    let previousSessionEndedDirty: Bool
 
     init(displayID: UInt32 = CGMainDisplayID(),
          displayServices: any DisplayServicesProviding,
@@ -170,6 +173,7 @@ final class XDRController: XDRControlling {
         self.lifecycleObserver = lifecycleObserver
         self.timing = timing
         self.restoreColorSync = restoreColorSync
+        self.previousSessionEndedDirty = dirtyFlagStore.isDirty
 
         if let override = supportsXDROverride {
             supported = override

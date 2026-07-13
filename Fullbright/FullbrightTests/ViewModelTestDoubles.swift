@@ -58,6 +58,7 @@ final class StubXDRController: XDRControlling {
     var brightness: Float = 0.5
     var currentNits: Int = 500
     var isXDRSupported: Bool = true
+    var previousSessionEndedDirty: Bool = false
     var enableCallCount = 0
     var disableCallCount = 0
     var adjustBrightnessCalls: [Float] = []

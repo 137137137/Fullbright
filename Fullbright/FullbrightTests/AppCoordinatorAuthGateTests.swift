@@ -146,6 +146,20 @@ struct AppCoordinatorAuthGateTests {
         #expect(keyManager.intercepting == true)
     }
 
+    @Test("unclean previous shutdown suppresses XDR auto-enable")
+    func dirtyPreviousSession_suppressesAutoEnable() async throws {
+        let (deps, _, xdr, keyManager) = makeDependencies(
+            authState: .authenticated(licenseKey: "PAID")
+        )
+        xdr.previousSessionEndedDirty = true
+        _ = AppCoordinator(dependencies: deps)
+
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(xdr.enableCallCount == 0)
+        #expect(xdr.isEnabled == false)
+        #expect(keyManager.intercepting == false)
+    }
+
     // MARK: - Runtime transitions
 
     @Test("notAuthenticated → trial: XDR transitions to enabled")

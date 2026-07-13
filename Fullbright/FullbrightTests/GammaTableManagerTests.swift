@@ -209,6 +209,39 @@ struct GammaTableManagerTests {
         #expect(abs((store.writtenTopValues.last ?? 0) - 1.0) < 0.001)
     }
 
+    @Test func readDefaultGamma_nearZeroBaseline_fallsBackToIdentity() {
+        // A corrupt near-black hardware table must never become the
+        // baseline — scaled writes would render the screen black.
+        let store = FakeGammaTableStore(scale: 0.02)
+        let (manager, _) = makeManager(store: store)
+
+        manager.readDefaultGamma(displayID: 1)
+        manager.applyScaledGamma(displayID: 1, softwareBrightness: 1.0)
+
+        // Identity fallback: top of the written table ≈ 1.0, not ≈ 0.02.
+        #expect(abs((store.writtenTopValues.last ?? 0) - 1.0) < 0.001)
+    }
+
+    @Test func xdrControllerDirtyCapture_reflectsStoreAtInit() {
+        // Covered more fully in AppCoordinator tests; here just the
+        // capture semantics.
+        let dirty = StubXDRDirtyFlagStore()
+        dirty.isDirty = true
+        let controller = XDRController(
+            displayID: 1,
+            displayServices: StubDisplayServices(),
+            nightShiftManager: StubNightShiftManager(),
+            gammaManager: StubGammaTableManager(),
+            displayConfigurator: StubDisplayConfigurator(),
+            dirtyFlagStore: dirty,
+            edrSignal: StubEDRSignal(),
+            lifecycleObserver: StubDisplayLifecycleObserver(),
+            restoreColorSync: {},
+            supportsXDROverride: true
+        )
+        #expect(controller.previousSessionEndedDirty == true)
+    }
+
     // MARK: - Fades
 
     @Test func fade_zeroDuration_appliesImmediately() {

@@ -69,6 +69,10 @@ final class GammaTableManager: GammaTableManaging {
         /// boosted (leftover from a crash or another app) — never scale on
         /// top of it.
         static let boostedBaselineThreshold: Float = 1.1
+        /// A baseline whose top values are below this is corrupt (a broken
+        /// read on a beta OS, or a leftover dimmed table). Scaling it would
+        /// render the screen effectively black — fall back to identity.
+        static let minimumBaselineTop: Float = 0.5
         /// Read-back comparison tolerance for drift detection. The OS may
         /// quantize written values slightly.
         static let driftTolerance: Float = 0.003
@@ -147,6 +151,15 @@ final class GammaTableManager: GammaTableManaging {
                 vDSP_vsmul(table.green, 1, &inverse, &table.green, 1, vDSP_Length(table.green.count))
                 vDSP_vsmul(table.blue, 1, &inverse, &table.blue, 1, vDSP_Length(table.blue.count))
             }
+        }
+
+        // A near-zero baseline would make every scaled write near-black —
+        // an unrecoverable screen for the user. Refuse it.
+        let baselineTop = maxValue(of: table)
+        if baselineTop < Constants.minimumBaselineTop {
+            logger.error("Captured gamma baseline is suspiciously dark (max \(baselineTop, privacy: .public)) — using linear identity fallback")
+            setLinearIdentityGamma()
+            return
         }
 
         defaultGammaRed = table.red

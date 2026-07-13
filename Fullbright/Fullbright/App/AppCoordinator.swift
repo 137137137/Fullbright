@@ -101,6 +101,15 @@ final class AppCoordinator {
         let enabled = xdrController.isEnabled
 
         if supported && canUse && !enabled {
+            // Don't auto-enable after an unclean shutdown — if XDR had a
+            // hand in it (e.g. the macOS 27 beta display blackout), auto
+            // enabling would re-trigger it on every login. The user can
+            // still enable manually from the menu bar.
+            guard !xdrController.previousSessionEndedDirty else {
+                logger.warning("Previous session ended dirty — skipping XDR auto-enable; waiting for manual toggle")
+                keyManager.intercepting = false
+                return
+            }
             logger.info("Enabling XDR (supported=\(supported), canUse=\(canUse))")
             xdrController.enableXDR()
             keyManager.intercepting = true
