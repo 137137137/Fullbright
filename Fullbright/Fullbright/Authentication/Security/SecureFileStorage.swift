@@ -53,35 +53,43 @@ final class SecureFileStorage: SecureStorageProviding {
 
         // Initialize salt. Order of preference:
         //   1. Salt previously persisted to the keychain (normal path).
-        //   2. Freshly generated random salt, persisted to the keychain.
-        //   3. EMERGENCY — legacy hardcoded salt. This branch only runs if
-        //      keychain writes are failing AND no prior salt exists, i.e. a
-        //      fresh install on a broken keychain. We fall back to the legacy
-        //      salt so the user isn't locked out on relaunch; the downside is
-        //      that new data is written with the known-plaintext salt until
-        //      keychain recovers, at which point migrateFromLegacyKey will
-        //      re-encrypt on the next read.
-        if let stored = keychain.load(for: saltKeychainKey) {
-            self.salt = stored
-        } else {
-            var random = Data(count: 32)
-            let status = random.withUnsafeMutableBytes { ptr -> OSStatus in
-                guard let base = ptr.baseAddress else { return errSecAllocate }
-                return SecRandomCopyBytes(kSecRandomDefault, 32, base)
+        //   2. Absent (fresh install) → generate a random salt and persist it.
+        //   3. EMERGENCY (write failed on a fresh install) → legacy hardcoded
+        //      salt so the user isn't locked out; migrateFromLegacyKey
+        //      re-encrypts once the keychain recovers.
+        //   4. EMERGENCY (keychain READ failed — distinct from "absent") →
+        //      legacy salt WITHOUT overwriting the keychain. Regenerating a
+        //      random salt on a transient read error would permanently orphan
+        //      existing encrypted data; instead we ride out the session on the
+        //      legacy salt and read the real one back once the keychain heals.
+        let resolvedSalt: Data
+        do {
+            if let stored = try keychain.load(for: saltKeychainKey) {
+                resolvedSalt = stored
+            } else {
+                var random = Data(count: 32)
+                let status = random.withUnsafeMutableBytes { ptr -> OSStatus in
+                    guard let base = ptr.baseAddress else { return errSecAllocate }
+                    return SecRandomCopyBytes(kSecRandomDefault, 32, base)
+                }
+                if status != errSecSuccess {
+                    let fallbackKey = SymmetricKey(size: .bits256)
+                    random = fallbackKey.withUnsafeBytes { Data($0) }
+                    logger.warning("SecRandomCopyBytes failed (status=\(status)), using CryptoKit fallback")
+                }
+                do {
+                    try keychain.save(random, for: saltKeychainKey)
+                    resolvedSalt = random
+                } catch {
+                    logger.critical("Keychain salt save failed on fresh init — falling back to legacy salt. This is an EMERGENCY path. Underlying error: \(error, privacy: .public)")
+                    resolvedSalt = legacySalt
+                }
             }
-            if status != errSecSuccess {
-                let fallbackKey = SymmetricKey(size: .bits256)
-                random = fallbackKey.withUnsafeBytes { Data($0) }
-                logger.warning("SecRandomCopyBytes failed (status=\(status)), using CryptoKit fallback")
-            }
-            do {
-                try keychain.save(random, for: saltKeychainKey)
-                self.salt = random
-            } catch {
-                logger.critical("Keychain salt save failed on fresh init — falling back to legacy salt. This is an EMERGENCY path. Underlying error: \(error, privacy: .public)")
-                self.salt = legacySalt
-            }
+        } catch {
+            logger.critical("Keychain salt read failed — using legacy salt this session (EMERGENCY, keychain not overwritten). Underlying error: \(error, privacy: .public)")
+            resolvedSalt = legacySalt
         }
+        self.salt = resolvedSalt
 
         // Cache the derived key for the primary salt
         self.derivedKey = Self.deriveKey(

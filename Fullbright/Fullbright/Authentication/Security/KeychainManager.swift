@@ -29,7 +29,7 @@ final class KeychainManager: Sendable, KeychainProviding {
         }
     }
 
-    func load(for key: String) -> Data? {
+    func load(for key: String) throws(KeychainError) -> Data? {
         var query = baseQuery(for: key)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -37,10 +37,17 @@ final class KeychainManager: Sendable, KeychainProviding {
         var dataTypeRef: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
 
-        if status == errSecSuccess {
+        switch status {
+        case errSecSuccess:
             return dataTypeRef as? Data
+        case errSecItemNotFound:
+            // Genuinely absent — distinct from a read failure.
+            return nil
+        default:
+            // e.g. errSecInteractionNotAllowed / errSecAuthFailed: surface it
+            // so callers don't mistake "unavailable" for "never stored".
+            throw KeychainError.loadFailed(status: status)
         }
-        return nil
     }
 
     func delete(for key: String) throws(KeychainError) {

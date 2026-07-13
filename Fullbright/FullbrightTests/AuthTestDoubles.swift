@@ -5,6 +5,7 @@
 
 import Foundation
 import os
+import Security
 @testable import Fullbright
 
 final class InMemoryKeychain: KeychainProviding, @unchecked Sendable {
@@ -21,6 +22,16 @@ final class InMemoryKeychain: KeychainProviding, @unchecked Sendable {
     func delete(for key: String) throws(KeychainError) {
         lock.withLock { _ = $0.removeValue(forKey: key) }
     }
+}
+
+/// Keychain double whose `load` always fails with a genuine (non-"not found")
+/// error, to prove callers don't treat a read failure as "never stored".
+final class ThrowingLoadKeychain: KeychainProviding, @unchecked Sendable {
+    func save(_ data: Data, for key: String) throws(KeychainError) {}
+    func load(for key: String) throws(KeychainError) -> Data? {
+        throw .loadFailed(status: errSecInteractionNotAllowed)
+    }
+    func delete(for key: String) throws(KeychainError) {}
 }
 
 @MainActor

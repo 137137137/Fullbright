@@ -20,17 +20,21 @@ private let skyLightPath = "/System/Library/PrivateFrameworks/SkyLight.framework
 
 @MainActor
 struct SkyLightDisplayConfigurator: DisplayConfiguring {
+    private typealias SLSConfigFn = @convention(c) (OpaquePointer, UInt32, UInt32) -> Int32
+
     private enum SLSMode {
         static let configModes: [UInt32] = [4, 3, 5, 2]
     }
 
-    func configureForXDR(displayID: UInt32) {
-        typealias SLSConfigFn = @convention(c) (OpaquePointer, UInt32, UInt32) -> Int32
+    /// Resolved once on first use (lazily) and cached. `dlopen` already
+    /// caches the handle, but the `dlsym` lookup was repeating on every call.
+    private static let configureFn: SLSConfigFn? = {
+        guard let handle = PrivateFrameworkLoader.loadFramework(skyLightPath) else { return nil }
+        return PrivateFrameworkLoader.symbol("SLSConfigureDisplayEnabled", from: handle, as: SLSConfigFn.self)
+    }()
 
-        guard let slHandle = PrivateFrameworkLoader.loadFramework(skyLightPath),
-              let slsConfigure: SLSConfigFn = PrivateFrameworkLoader.symbol(
-                  "SLSConfigureDisplayEnabled", from: slHandle, as: SLSConfigFn.self
-              ) else { return }
+    func configureForXDR(displayID: UInt32) {
+        guard let slsConfigure = Self.configureFn else { return }
 
         var config: CGDisplayConfigRef?
         guard CGBeginDisplayConfiguration(&config) == .success, let cfg = config else { return }

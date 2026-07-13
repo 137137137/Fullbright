@@ -164,4 +164,16 @@ struct TrialManagerTests {
         let state = manager.startTrial()
         #expect(state == .expired)
     }
+
+    @Test func startTrial_keychainReadFails_deniesTrial() {
+        // A genuine keychain read failure (not "absent") must NOT be treated
+        // as "trial never used" — otherwise a transient error re-grants a trial.
+        let manager = TrialManager(
+            storage: InMemorySecureStorage(),
+            serverClient: StubAuthServerClient(),
+            keychain: ThrowingLoadKeychain(),
+            deviceIdentifier: StubDeviceIdentifier()
+        )
+        #expect(manager.startTrial() == .expired)
+    }
 }

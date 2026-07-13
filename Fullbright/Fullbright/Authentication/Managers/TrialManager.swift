@@ -103,18 +103,20 @@ final class TrialManager: TrialManaging {
     }
 
     private func calculateTrialState(from trialData: SecureTrialData) -> AuthenticationState {
-        let daysSinceStart = Calendar.current.dateComponents([.day], from: trialData.startDate, to: Date()).day ?? 0
-        let daysRemaining = Self.trialDurationDays - daysSinceStart
-
-        if daysRemaining > 0 {
-            guard let expiryDate = Calendar.current.date(byAdding: .day, value: Self.trialDurationDays, to: trialData.startDate) else {
-                return .expired
-            }
-
-            return .trial(daysRemaining: daysRemaining, expiryDate: expiryDate)
-        } else {
+        guard let expiryDate = Calendar.current.date(
+            byAdding: .day, value: Self.trialDurationDays, to: trialData.startDate
+        ) else {
             return .expired
         }
+        // Both the expiry gate and the day count derive from the single
+        // `expiryDate` instant. (Previously `daysRemaining` was a separate
+        // startDate-based calendar-day count that could disagree with
+        // `expiryDate` by a day around a DST transition.) Round up so a
+        // just-started trial reads "14 days", not "13".
+        let secondsRemaining = expiryDate.timeIntervalSinceNow
+        guard secondsRemaining > 0 else { return .expired }
+        let daysRemaining = Int((secondsRemaining / 86_400).rounded(.up))
+        return .trial(daysRemaining: daysRemaining, expiryDate: expiryDate)
     }
 
     // MARK: - Start Trial
@@ -122,7 +124,14 @@ final class TrialManager: TrialManaging {
     func startTrial() -> AuthenticationState {
         let deviceId = deviceIdentifier.secureIdentifier
 
-        if keychain.load(for: StorageKey.trialUsed) != nil {
+        do {
+            if try keychain.load(for: StorageKey.trialUsed) != nil {
+                return .expired
+            }
+        } catch {
+            // A keychain READ failure must not be read as "trial never used"
+            // — that would re-grant a fresh trial on a transient error.
+            logger.error("Keychain read failed checking trial-used flag — denying trial: \(error, privacy: .public)")
             return .expired
         }
 

@@ -26,7 +26,7 @@ private let hdrStyleMask = NSWindow.StyleMask(rawValue: 0x8000)
 /// linear sRGB, keeping the display's EDR pipeline engaged.
 @MainActor
 private final class EDRTriggerView: MTKView, MTKViewDelegate {
-    private var commandQueue: (any MTLCommandQueue)?
+    private let commandQueue: any MTLCommandQueue
 
     init?(frame: CGRect, edrValue: Double) {
         guard let metalDevice = MTLCreateSystemDefaultDevice(),
@@ -34,8 +34,8 @@ private final class EDRTriggerView: MTKView, MTKViewDelegate {
               let colorSpace = CGColorSpace(name: CGColorSpace.extendedLinearSRGB) else {
             return nil
         }
+        self.commandQueue = queue
         super.init(frame: frame, device: metalDevice)
-        commandQueue = queue
 
         autoResizeDrawable = false
         drawableSize = CGSize(width: 2, height: 2)
@@ -57,8 +57,7 @@ private final class EDRTriggerView: MTKView, MTKViewDelegate {
     }
 
     func draw(in view: MTKView) {
-        guard let commandQueue,
-              let renderPassDescriptor = view.currentRenderPassDescriptor,
+        guard let renderPassDescriptor = view.currentRenderPassDescriptor,
               let commandBuffer = commandQueue.makeCommandBuffer(),
               let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor),
               let drawable = view.currentDrawable else {
