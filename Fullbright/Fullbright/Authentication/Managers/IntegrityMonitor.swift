@@ -6,13 +6,12 @@
 //
 //  Owns a single long-running Task that sleeps for `interval`, calls
 //  `IntegrityChecking.passesAllChecks()`, and invokes `onFailure` if the
-//  check fails. Uses the OSAllocatedUnfairLock<Task?> + nonisolated deinit
-//  pattern established elsewhere so the loop is cancellable from any
+//  check fails. A `nonisolated deinit` cancels the MainActor-isolated Task
+//  property directly (Task is Sendable), so the loop is torn down from any
 //  context, including during deinit.
 //
 
 import Foundation
-import os
 
 @MainActor
 protocol IntegrityMonitoring: AnyObject {
