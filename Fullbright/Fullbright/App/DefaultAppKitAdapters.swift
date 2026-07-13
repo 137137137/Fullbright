@@ -32,6 +32,10 @@ struct DefaultAppLifecycle: AppLifecycle {
                 let window = NSApp.windows.first { $0.identifier?.rawValue.contains("Settings") == true }
                     ?? NSApp.windows.first { $0.canBecomeKey && $0.isVisible && !($0 is NSPanel) }
                 if let window {
+                    // Join the user's current Space — otherwise the window
+                    // raises on whichever Space it was created on and looks
+                    // like it never opened.
+                    window.collectionBehavior.insert(.moveToActiveSpace)
                     window.makeKeyAndOrderFront(nil)
                     window.orderFrontRegardless()
                     return

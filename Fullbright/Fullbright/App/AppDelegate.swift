@@ -17,9 +17,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // `showSettingsWindow:` is the documented responder action for
             // opening the Settings scene on macOS 13+. We look it up by
             // string because the selector isn't exposed by any Swift type;
-            // the single-paren form is the standard spelling.
-            NSApp.sendAction(NSSelectorFromString("showSettingsWindow:"), to: nil, from: nil)
-            DefaultAppLifecycle().activate()
+            // the single-paren form is the standard spelling. Activate
+            // FIRST — with no key window the action has no responder chain
+            // to travel, so it silently no-ops in a background app.
+            NSApp.activate()
+            DispatchQueue.main.async {
+                NSApp.sendAction(NSSelectorFromString("showSettingsWindow:"), to: nil, from: nil)
+                DefaultAppLifecycle().activate()
+            }
         }
         return true
     }
