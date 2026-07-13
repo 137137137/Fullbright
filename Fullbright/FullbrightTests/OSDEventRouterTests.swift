@@ -26,6 +26,9 @@ struct OSDEventRouterTests {
             gammaManager: gamma,
             displayConfigurator: StubDisplayConfigurator(),
             dirtyFlagStore: StubXDRDirtyFlagStore(),
+            edrSignal: StubEDRSignal(),
+            lifecycleObserver: StubDisplayLifecycleObserver(),
+            restoreColorSync: {},
             supportsXDROverride: true
         )
         let osd = StubOSDController()

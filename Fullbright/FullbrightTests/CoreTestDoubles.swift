@@ -137,7 +137,7 @@ final class StubGammaTableManager: GammaTableManaging {
 
     func applyScaledGamma(displayID: UInt32, softwareBrightness: Float?) {
         applyScaledGammaCalls.append((displayID, softwareBrightness))
-        eventLog?.record("applyScaledGamma(\(softwareBrightness.map(String.init) ?? "nil"))")
+        eventLog?.record("applyScaledGamma(\(softwareBrightness.map { "\($0)" } ?? "nil"))")
     }
 
     func fadeToSoftwareBrightness(_ target: Float, displayID: UInt32, duration: TimeInterval) {

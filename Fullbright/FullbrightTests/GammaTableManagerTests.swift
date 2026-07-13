@@ -186,7 +186,6 @@ struct GammaTableManagerTests {
 
     @Test func readDefaultGamma_stubbornBoostedBaseline_normalizes() async {
         let store = FakeGammaTableStore(scale: 1.4)
-        let (manager, _) = makeManager(store: store)
 
         // Make the restore ineffective: table stays boosted after restore.
         // Simplest hostile simulation: restore re-boosts the table.
