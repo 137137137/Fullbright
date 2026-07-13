@@ -19,6 +19,14 @@ final class TrialManager: TrialManaging {
 
     static let trialDurationDays = 14
 
+    /// How far the clock may appear to move backward before we call it
+    /// manipulation. Generous enough for NTP corrections and honest
+    /// clock fixes; far too small to extend a 14-day trial usefully.
+    static let clockRollbackTolerance: TimeInterval = 60 * 60 * 24
+    /// Watermark persistence granularity — avoids rewriting the trial
+    /// record on every single status check.
+    private static let watermarkUpdateGranularity: TimeInterval = 60 * 60
+
     /// Single-subscriber event stream. See LicenseManager.events for rationale.
     let events: AsyncStream<TrialEvent>
     private let eventsContinuation: AsyncStream<TrialEvent>.Continuation
@@ -53,6 +61,21 @@ final class TrialManager: TrialManaging {
                   trialData.deviceId == deviceIdentifier.secureIdentifier else {
                 return .expired
             }
+
+            // Clock-rollback guard: `startDate` vs the wall clock alone
+            // makes a trial infinite for anyone willing to set their clock
+            // back. Track the highest time ever observed; a clock sitting
+            // meaningfully before it means manipulation, not NTP drift.
+            let now = Date()
+            let watermark = trialData.latestObservedDate ?? trialData.startDate
+            if now < watermark.addingTimeInterval(-Self.clockRollbackTolerance) {
+                logger.warning("Clock rollback detected (now is \(Int(watermark.timeIntervalSince(now)), privacy: .public)s before watermark) — treating trial as expired")
+                return .expired
+            }
+            if now > watermark.addingTimeInterval(Self.watermarkUpdateGranularity) {
+                persistWatermark(now, for: trialData)
+            }
+
             let state = calculateTrialState(from: trialData)
             if case .trial = state, !trialData.confirmed {
                 confirmTrialWithServer(trialData: trialData)
@@ -60,6 +83,21 @@ final class TrialManager: TrialManaging {
             return state
         } else {
             return .notAuthenticated
+        }
+    }
+
+    /// Best-effort: a failed watermark write never blocks a valid trial.
+    private func persistWatermark(_ now: Date, for trialData: SecureTrialData) {
+        let updated = SecureTrialData(
+            startDate: trialData.startDate,
+            deviceId: trialData.deviceId,
+            confirmed: trialData.confirmed,
+            latestObservedDate: now
+        )
+        do {
+            try storage.saveEncrypted(updated, for: StorageKey.trialData)
+        } catch {
+            logger.error("Failed to persist trial date watermark: \(error, privacy: .public)")
         }
     }
 
@@ -121,7 +159,12 @@ final class TrialManager: TrialManaging {
             let result = await self.serverClient.registerTrial(deviceId: trialData.deviceId)
             switch result {
             case .confirmed:
-                let confirmed = SecureTrialData(startDate: trialData.startDate, deviceId: trialData.deviceId, confirmed: true)
+                let confirmed = SecureTrialData(
+                    startDate: trialData.startDate,
+                    deviceId: trialData.deviceId,
+                    confirmed: true,
+                    latestObservedDate: trialData.latestObservedDate
+                )
                 do {
                     try self.storage.saveEncrypted(confirmed, for: StorageKey.trialData)
                 } catch {

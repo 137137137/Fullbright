@@ -146,26 +146,26 @@ struct AppCoordinatorAuthGateTests {
         #expect(keyManager.intercepting == true)
     }
 
-    @Test("manual XDR toggle drives key interception on and off")
-    func manualToggle_syncsInterception() async throws {
+    @Test("key interception follows auth, not the XDR toggle — SDR mode keeps our OSD")
+    func interception_followsAuthNotToggle() async throws {
         let (deps, _, xdr, keyManager) = makeDependencies(
             authState: .authenticated(licenseKey: "PAID")
         )
-        // Suppress auto-enable so the manual path is what's exercised.
+        // Suppress auto-enable: XDR starts OFF, yet keys must still be
+        // intercepted so the SDR overlay works.
         xdr.previousSessionEndedDirty = true
         let coordinator = AppCoordinator(dependencies: deps)
         try await Task.sleep(for: .milliseconds(80))
-        #expect(keyManager.intercepting == false)
+        #expect(keyManager.intercepting == true)
+        #expect(xdr.isEnabled == false)
 
-        // Menu-bar toggle mutates the controller directly, bypassing the
-        // coordinator — interception must follow via observation.
+        // Toggling XDR on/off must not affect interception while authorized.
         _ = xdr.enableXDR()
-        let interceptOn = await waitUntil { keyManager.intercepting == true }
-        #expect(interceptOn)
-
+        try await Task.sleep(for: .milliseconds(40))
+        #expect(keyManager.intercepting == true)
         _ = xdr.disableXDR(immediate: false)
-        let interceptOff = await waitUntil { keyManager.intercepting == false }
-        #expect(interceptOff)
+        try await Task.sleep(for: .milliseconds(40))
+        #expect(keyManager.intercepting == true)
         withExtendedLifetime(coordinator) {}
     }
 
@@ -180,7 +180,9 @@ struct AppCoordinatorAuthGateTests {
         try await Task.sleep(for: .milliseconds(120))
         #expect(xdr.enableCallCount == 0)
         #expect(xdr.isEnabled == false)
-        #expect(keyManager.intercepting == false)
+        // Keys stay intercepted for the SDR overlay — only XDR itself is
+        // held back.
+        #expect(keyManager.intercepting == true)
     }
 
     // MARK: - Runtime transitions

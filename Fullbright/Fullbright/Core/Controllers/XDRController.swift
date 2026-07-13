@@ -342,17 +342,50 @@ final class XDRController: XDRControlling {
         hdrWindow?.orderOut(nil)
         hdrWindow = nil
 
+        // Hand the OSD/slider state over to SDR semantics (backlight
+        // fraction) so they reflect the restored backlight, not a stale
+        // unified value.
+        brightness = restore
+        updateSDRNits(backlightFraction: restore)
+
         gammaManager.resetLogging()
         dirtyFlagStore.isDirty = false
     }
 
-    /// Adjust unified brightness. Called from brightness key handler.
+    /// Adjust brightness from the key handler or sliders. With XDR on this
+    /// drives the unified gamma pipeline; with XDR off it drives the
+    /// hardware backlight across the SDR range so our OSD keeps working
+    /// (macOS 27 betas don't reliably show the native one).
     func adjustBrightness(delta: Float) {
-        guard isEnabled else { return }
+        guard isEnabled else {
+            adjustSDRBacklight(delta: delta)
+            return
+        }
         hasUserAdjustedSinceEnable = true
         brightness = max(0.0, min(1.0, brightness + delta))
         updateNits()
         fadeToCurrentTarget(duration: timing.keyFadeDuration)
+    }
+
+    /// XDR-off key handling: step the real backlight. `brightness` then
+    /// means "backlight fraction" (1.0 = SDR max) so the OSD renders a
+    /// full-width SDR slider, and nits stay within the SDR ceiling.
+    private func adjustSDRBacklight(delta: Float) {
+        guard supported else { return }
+        let current = displayServices.getBrightness(displayID)
+        let target = max(0.0, min(1.0, current + delta))
+        if !displayServices.setBrightness(displayID, target) {
+            logger.warning("DisplayServices.setBrightness returned failure during SDR key adjust")
+        }
+        brightness = target
+        updateSDRNits(backlightFraction: target)
+    }
+
+    /// SDR-mode nits estimate from linear luminance (falls back to a
+    /// gamma-2 approximation of the perceptual fraction).
+    private func updateSDRNits(backlightFraction: Float) {
+        let linear = displayServices.getLinearBrightness(displayID) ?? (backlightFraction * backlightFraction)
+        currentNits = max(1, Int(linear * BrightnessNitsConverter.sdrMaxNits))
     }
 
     // MARK: - Display Lifecycle

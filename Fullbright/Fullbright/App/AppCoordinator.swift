@@ -47,11 +47,6 @@ final class AppCoordinator {
         // on auth state so it can happen first.
         osdEventRouter.attach(to: keyManager)
 
-        // Key interception must track the XDR enabled state itself, not
-        // just auth transitions — the menu-bar toggle flips XDR without
-        // going through this coordinator, and stale interception swallows
-        // brightness keys into a no-op (stuck OSD, dead keys).
-        startObservingXDREnabled()
 
         // Initial XDR sync reflects the starting authState (typically
         // .notAuthenticated on first launch). Subsequent transitions
@@ -126,10 +121,12 @@ final class AppCoordinator {
     }
 
     /// Single source of truth for brightness-key interception: swallow
-    /// keys exactly while XDR is enabled (and auth allows it). Anything
-    /// else means the native brightness controls must keep working.
+    /// keys whenever the user is authorized (trial or license) on XDR
+    /// hardware — with XDR on, keys drive the unified pipeline; with XDR
+    /// off they drive the backlight in SDR range through our OSD.
+    /// Unauthorized (expired/no trial) hands the keys back to macOS.
     private func syncKeyInterception() {
-        let shouldIntercept = xdrController.isEnabled && authManager.authState.canUseXDR
+        let shouldIntercept = xdrController.isXDRSupported && authManager.authState.canUseXDR
         guard keyManager.intercepting != shouldIntercept else { return }
         keyManager.intercepting = shouldIntercept
         if shouldIntercept {
@@ -138,20 +135,5 @@ final class AppCoordinator {
             keyManager.stop()
         }
         logger.info("Brightness-key interception \(shouldIntercept ? "ON" : "OFF", privacy: .public)")
-    }
-
-    /// Re-syncs interception whenever `xdrController.isEnabled` changes,
-    /// regardless of who changed it (menu toggle, gamma-conflict guard,
-    /// auth transition).
-    private func startObservingXDREnabled() {
-        withObservationTracking {
-            _ = xdrController.isEnabled
-        } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.syncKeyInterception()
-                self.startObservingXDREnabled()
-            }
-        }
     }
 }

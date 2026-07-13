@@ -23,6 +23,13 @@ final class SecureAuthenticationManager: AuthenticationManaging {
     // accessed from within this module.
     var authState: AuthenticationState = .notAuthenticated
 
+    /// Latched when an integrity check fails (startup or monitor). While
+    /// set, `refreshAuthenticationState` refuses to recompute state from
+    /// storage — otherwise a menu-open refresh would undo the integrity
+    /// penalty without ever re-running the check.
+    @ObservationIgnored
+    private var integrityHasFailed = false
+
     // `internal` (rather than `private`) so the DEBUG extension in
     // SecureAuthenticationManager+Debug.swift can reach them directly. The
     // DEBUG extension lives in the same module and file-private would force
@@ -82,6 +89,7 @@ final class SecureAuthenticationManager: AuthenticationManaging {
     /// a half-initialized self.
     func start() async {
         let integrityPassed = await integrityChecker.passesAllChecks()
+        integrityHasFailed = !integrityPassed
         let licenseState = licenseManager.checkLicense()
         let trialState = trialManager.checkTrialStatus()
 
@@ -101,6 +109,7 @@ final class SecureAuthenticationManager: AuthenticationManaging {
 
         integrityMonitor.start(interval: Self.monitoringInterval) { [weak self] in
             guard let self else { return }
+            self.integrityHasFailed = true
             self.authState = AuthStateReducer.reduce(
                 current: self.authState,
                 event: .integrityMonitorFailed
@@ -155,6 +164,9 @@ final class SecureAuthenticationManager: AuthenticationManaging {
     // MARK: - Authentication Status
 
     func refreshAuthenticationState() {
+        // Integrity failures are terminal for the session — recomputing
+        // from storage would silently undo the .expired penalty.
+        guard !integrityHasFailed else { return }
         if let licenseState = licenseManager.checkLicense() {
             authState = licenseState
             if case .authenticated(let licenseKey) = licenseState {

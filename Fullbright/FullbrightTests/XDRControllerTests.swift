@@ -289,13 +289,48 @@ struct XDRControllerTests {
         #expect(h.controller.engagementState == .idle)
     }
 
-    @Test("adjustBrightness is a no-op when XDR is off")
-    func adjustBrightness_whenOff_doesNothing() {
-        let h = makeHarness()
-        let before = h.controller.brightness
+    @Test("adjustBrightness with XDR off steps the hardware backlight (SDR mode)")
+    func adjustBrightness_whenOff_stepsBacklight() {
+        let ds = StubDisplayServices()
+        ds.storedBrightness = 0.5
+        ds.storedLinearBrightness = 0.3
+        let h = makeHarness(displayServices: ds)
+
         h.controller.adjustBrightness(delta: 0.1)
-        #expect(h.controller.brightness == before)
+
+        // Backlight stepped, no gamma involvement, OSD state reflects SDR.
+        #expect(abs(ds.storedBrightness - 0.6) < 0.0001)
         #expect(h.gamma.fadeCalls.isEmpty)
+        #expect(abs(h.controller.brightness - 0.6) < 0.0001)
+        #expect(h.controller.currentNits == Int(0.3 * 500))
+    }
+
+    @Test("SDR-mode adjust clamps the backlight to [0, 1]")
+    func adjustBrightness_whenOff_clamps() {
+        let ds = StubDisplayServices()
+        ds.storedBrightness = 0.95
+        let h = makeHarness(displayServices: ds)
+
+        h.controller.adjustBrightness(delta: 0.5)
+        #expect(ds.storedBrightness == 1.0)
+
+        h.controller.adjustBrightness(delta: -5.0)
+        #expect(ds.storedBrightness == 0.0)
+    }
+
+    @Test("disable hands the OSD state over to SDR semantics")
+    func disable_updatesOSDStateToSDR() {
+        let ds = StubDisplayServices()
+        ds.storedBrightness = 0.65
+        ds.storedLinearBrightness = 0.4
+        let h = makeHarness(displayServices: ds)
+        _ = h.controller.enableXDR()
+        _ = h.controller.disableXDR(immediate: true)
+
+        // brightness now means "backlight fraction" (the restored 0.65),
+        // and nits sit inside the SDR ceiling.
+        #expect(abs(h.controller.brightness - 0.65) < 0.0001)
+        #expect(h.controller.currentNits <= Int(BrightnessNitsConverter.sdrMaxNits))
     }
 
     @Test("adjustBrightness clamps to [0.0, 1.0] when XDR is on")

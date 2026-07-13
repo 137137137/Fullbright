@@ -55,6 +55,19 @@ struct SecureAuthenticationManagerTests {
         #expect(manager.authState == .expired)
     }
 
+    @Test func refresh_afterIntegrityFailure_staysExpired() async {
+        // A refresh recomputes state from storage; it must not undo the
+        // integrity penalty even when a valid trial/license still exists.
+        let trial = StubTrialManager()
+        trial.nextCheckResult = .trial(daysRemaining: 10, expiryDate: Date(timeIntervalSinceNow: 86400 * 10))
+        let (manager, _, _) = makeManager(integrityPasses: false, trial: trial)
+        await manager.start()
+        #expect(manager.authState == .expired)
+
+        manager.refreshAuthenticationState()
+        #expect(manager.authState == .expired)
+    }
+
     @Test func start_noTrialNoLicense_remainsNotAuthenticated() async {
         let trial = StubTrialManager()
         let license = StubLicenseManager()

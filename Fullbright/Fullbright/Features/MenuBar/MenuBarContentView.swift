@@ -56,7 +56,7 @@ struct MenuBarContentView: View {
                 }
                 .padding(.horizontal, MenuBarStyle.horizontalPadding)
                 .padding(.bottom, MenuBarStyle.xdrRowVerticalPadding)
-                .disabled(!viewModel.canUseXDR || !viewModel.isXDREnabled)
+                .disabled(!viewModel.canUseXDR)
             } else {
                 Text("No XDR Display Detected")
                     .font(MenuBarStyle.bodyFont)
