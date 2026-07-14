@@ -7,7 +7,7 @@
 
 import Foundation
 
-final class AuthServerClient: AuthServerClientProviding, Sendable {
+struct AuthServerClient: AuthServerClientProviding {
 
     // MARK: - Codable Request/Response Types
 

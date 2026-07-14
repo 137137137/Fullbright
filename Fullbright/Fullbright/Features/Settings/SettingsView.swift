@@ -30,13 +30,12 @@ struct SettingsView: View {
             isPresented: Binding(
                 get: { viewModel.alertState != nil },
                 set: { if !$0 { viewModel.alertState = nil } }
-            )
-        ) {
+            ),
+            presenting: viewModel.alertState
+        ) { _ in
             Button("OK") { viewModel.alertState = nil }
-        } message: {
-            if let message = viewModel.alertState?.message {
-                Text(message)
-            }
+        } message: { alert in
+            Text(alert.message)
         }
     }
 

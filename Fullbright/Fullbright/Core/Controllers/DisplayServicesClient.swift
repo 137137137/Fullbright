@@ -19,7 +19,7 @@ private typealias DSEnableALCFunc = @convention(c) (UInt32, Bool) -> Int32
 private let displayServicesPath = "/System/Library/PrivateFrameworks/DisplayServices.framework/Versions/A/DisplayServices"
 
 @MainActor
-final class DisplayServicesClient: DisplayServicesProviding {
+struct DisplayServicesClient: DisplayServicesProviding {
     private let fnGetBrightness: DSGetBrightnessFunc?
     private let fnSetBrightness: DSSetBrightnessFunc?
     private let fnGetLinearBrightness: DSGetLinearBrightnessFunc?

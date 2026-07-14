@@ -8,7 +8,7 @@
 import Foundation
 import Security
 
-final class KeychainManager: Sendable, KeychainProviding {
+struct KeychainManager: KeychainProviding {
     private let serviceName = AppIdentifier.serviceID
 
     init() {}

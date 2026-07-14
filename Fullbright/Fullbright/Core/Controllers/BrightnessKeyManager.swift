@@ -42,38 +42,17 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
     /// 1/32 of full range: 16 SDR steps + 16 XDR steps.
     static let brightnessStepValue: Float = 1.0 / 32.0
 
-    // The CGEventTap callback is a plain C function running on an event-tap
-    // thread, so the two pieces of state it needs live in static locks.
-
-    private static let interceptingState = OSAllocatedUnfairLock(initialState: false)
-    private static let keyHandlerState = OSAllocatedUnfairLock<BrightnessKeyHandler?>(initialState: nil)
-    /// The live tap port, reachable from the C callback so it can re-enable
-    /// the tap when the system disables it (timeout / user input).
-    /// CFMachPort is not Sendable; access is confined to start/stop on the
-    /// main actor and CGEvent.tapEnable, which is thread-safe.
-    private static let tapPortState = OSAllocatedUnfairLock<CFMachPort?>(uncheckedState: nil)
-
-    private static var isIntercepting: Bool {
-        get { interceptingState.withLock { $0 } }
-        set { interceptingState.withLock { $0 = newValue } }
-    }
-
-    private static var currentKeyHandler: BrightnessKeyHandler? {
-        get { keyHandlerState.withLock { $0 } }
-        set { keyHandlerState.withLock { $0 = newValue } }
-    }
+    /// Whether the callback should decide/return for this event.
+    private enum EventDecision: Sendable { case passThrough, swallow }
 
     var brightnessStep: Float { Self.brightnessStepValue }
 
-    var intercepting: Bool {
-        get { Self.isIntercepting }
-        set { Self.isIntercepting = newValue }
-    }
-
-    var onBrightnessKey: BrightnessKeyHandler? {
-        get { Self.currentKeyHandler }
-        set { Self.currentKeyHandler = newValue }
-    }
+    // Instance state. The CGEventTap C callback recovers `self` from its
+    // refcon (`userInfo`) and reaches this state via `MainActor.assumeIsolated`
+    // — the tap's run-loop source is on the main run loop, so the callback
+    // already runs on the main thread. No shared static state / locks needed.
+    var intercepting: Bool = false
+    var onBrightnessKey: BrightnessKeyHandler?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -100,10 +79,21 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: mask,
-            callback: { _, type, event, _ in
-                BrightnessKeyManager.handleEvent(type: type, event: event)
+            callback: { _, type, event, userInfo in
+                guard let userInfo else { return Unmanaged.passRetained(event) }
+                let manager = Unmanaged<BrightnessKeyManager>.fromOpaque(userInfo).takeUnretainedValue()
+                // The tap's run-loop source lives on the main run loop, so this
+                // fires on the main thread — assume the main actor to touch
+                // `manager`'s isolated state directly.
+                let decision = MainActor.assumeIsolated {
+                    manager.handleEvent(type: type, event: event)
+                }
+                switch decision {
+                case .passThrough: return Unmanaged.passRetained(event)
+                case .swallow: return nil
+                }
             },
-            userInfo: nil
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
         )
 
         guard let tap else {
@@ -112,7 +102,6 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         }
 
         eventTap = tap
-        Self.tapPortState.withLockUnchecked { $0 = tap }
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         if let source = runLoopSource {
             CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
@@ -129,33 +118,29 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
             }
         }
         eventTap = nil
-        Self.tapPortState.withLockUnchecked { $0 = nil }
         runLoopSource = nil
         logger.info("Event tap stopped")
     }
 
-    // Called off the main actor on the event-tap thread.
-    // Return nil to swallow the event, passRetained to pass it through.
-    private static func handleEvent(
-        type: CGEventType,
-        event: CGEvent
-    ) -> Unmanaged<CGEvent>? {
+    // Runs on the main actor (see the callback in `start()`), returning a
+    // decision the C callback translates into swallow (nil) / pass-through.
+    private func handleEvent(type: CGEventType, event: CGEvent) -> EventDecision {
         // The system silently disables taps whose callbacks run too slowly
         // (or on user-input interference). Without re-enabling here, every
         // subsequent brightness key flows through natively — the native OSD
         // reappears and ours goes dead until app restart.
-        if isTapDisabledEvent(type) {
+        if Self.isTapDisabledEvent(type) {
             logger.error("Event tap disabled by system (type \(type.rawValue, privacy: .public)) — re-enabling")
-            if let tap = tapPortState.withLockUnchecked({ $0 }) {
+            if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
-            return nil
+            return .swallow
         }
 
         guard type.rawValue == MediaKey.sysDefinedEventType,
               let nsEvent = NSEvent(cgEvent: event),
               nsEvent.subtype.rawValue == MediaKey.mediaKeySubtype else {
-            return Unmanaged.passRetained(event)
+            return .passThrough
         }
 
         let keyCode = Int((nsEvent.data1 & MediaKey.keyCodeMask) >> 16)
@@ -164,27 +149,27 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         let isKeyDown = keyState == MediaKey.keyDownState
 
         guard keyCode == MediaKey.brightnessUp || keyCode == MediaKey.brightnessDown else {
-            return Unmanaged.passRetained(event)
+            return .passThrough
         }
 
-        let intercepting = isIntercepting
-        logger.debug("Brightness key: keyCode=\(keyCode, privacy: .public) isKeyDown=\(isKeyDown, privacy: .public) intercepting=\(intercepting, privacy: .public)")
+        logger.debug("Brightness key: keyCode=\(keyCode, privacy: .public) isKeyDown=\(isKeyDown, privacy: .public) intercepting=\(self.intercepting, privacy: .public)")
 
         guard intercepting else {
-            return Unmanaged.passRetained(event)
+            return .passThrough
         }
 
         // Swallow key-up too while intercepting, otherwise the native OSD flickers.
-        guard isKeyDown else { return nil }
+        guard isKeyDown else { return .swallow }
 
         let isUp = keyCode == MediaKey.brightnessUp
-        if let handler = currentKeyHandler {
-            Task { @MainActor in
-                handler(isUp)
-            }
+        if let handler = onBrightnessKey {
+            // Defer the handler to the next main-actor turn so this tap
+            // callback returns immediately — a slow callback gets the tap
+            // disabled by the system.
+            Task { @MainActor in handler(isUp) }
         }
 
-        return nil
+        return .swallow
     }
 
     /// Internal (not private) for unit testing.
