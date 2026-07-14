@@ -72,7 +72,11 @@ final class BrightnessKeyManager: BrightnessKeyManaging {
         }
         logger.info("Accessibility granted")
 
-        let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue) | (1 << MediaKey.sysDefinedEventType)
+        // Only NX_SYSDEFINED carries brightness media keys. We deliberately
+        // do NOT tap keyDown: it would route every keystroke system-wide
+        // through this process all day (wakeups + input latency) for events
+        // handleEvent only ever passes through.
+        let mask: CGEventMask = 1 << MediaKey.sysDefinedEventType
 
         let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,

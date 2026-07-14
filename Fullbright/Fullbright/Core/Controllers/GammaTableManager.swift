@@ -331,12 +331,18 @@ final class GammaTableManager: GammaTableManaging {
         guard count > 0 else { return }
 
         let brightness = (sb * 100.0).rounded() / 100.0
-        let ceiling: Float = brightness > 1.0 ? maxEDR : 1.0
-        let t = brightness / ceiling
-        let scalingFactor = (ceiling - Constants.minimumBrightness) * t + Constants.minimumBrightness
+        // One continuous curve across the SDR/XDR boundary at 1.0:
+        //   sb ≤ 1  → floor(minimumBrightness)…1.0   (SDR)
+        //   sb > 1  → 1.0…maxEDR                       (XDR); scale directly.
+        // The previous form re-applied the minimumBrightness floor inside the
+        // XDR branch, which made the two segments miss at sb=1.0 and produced
+        // a visible ~3% brightness jump at unified brightness 0.5.
+        let scalingFactor: Float = brightness > 1.0
+            ? brightness
+            : (1.0 - Constants.minimumBrightness) * brightness + Constants.minimumBrightness
 
         if !hasLoggedScaling {
-            logger.info("Scaling: maxEDR=\(self.maxEDR, privacy: .public), brightness=\(brightness, privacy: .public), ceiling=\(ceiling, privacy: .public), t=\(t, privacy: .public), scalingFactor=\(scalingFactor, privacy: .public)")
+            logger.info("Scaling: maxEDR=\(self.maxEDR, privacy: .public), brightness=\(brightness, privacy: .public), scalingFactor=\(scalingFactor, privacy: .public)")
             hasLoggedScaling = true
         }
 

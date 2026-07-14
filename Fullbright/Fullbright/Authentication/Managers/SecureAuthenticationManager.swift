@@ -45,7 +45,10 @@ final class SecureAuthenticationManager: AuthenticationManaging {
     #endif
 
     // Interval between background integrity + state re-validation ticks.
-    private static let monitoringInterval: Duration = .seconds(300)
+    // 30 min: the periodic integrity check re-hashes the whole app bundle
+    // (SecStaticCodeCheckValidity — CPU + disk), so a tighter cadence just
+    // burns energy all day. Tampering is still caught within the half hour.
+    private static let monitoringInterval: Duration = .seconds(1800)
 
     /// Tasks observing `licenseManager.events` and `trialManager.events`.
     /// A `nonisolated deinit` cancels these MainActor-isolated `Task`

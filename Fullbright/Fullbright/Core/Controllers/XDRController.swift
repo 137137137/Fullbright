@@ -48,7 +48,7 @@ struct XDRTiming: Sendable {
     /// made too eagerly after lid-open/wake; retrying sooner keeps it locked.
     var retryCooldown: Duration = .seconds(30)
     /// Interval between headroom checks while XDR is active.
-    var monitorInterval: Duration = .milliseconds(500)
+    var monitorInterval: Duration = .seconds(2)
     /// Gamma fade duration for enable/headroom-change transitions.
     var brightnessFadeDuration: TimeInterval = 0.35
     /// Gamma fade duration for brightness-key steps (kept short so keys
@@ -73,7 +73,11 @@ final class XDRController: XDRControlling {
         /// scale past 1.0.
         static let edrReady: Double = 1.05
         /// Headroom change worth recomputing the brightness ceiling for.
-        static let headroomEpsilon: Double = 0.0001
+        /// Deliberately coarse: granted EDR headroom jitters continuously
+        /// with ambient light and background HDR content, and every crossing
+        /// used to spawn a full 0.35s gamma re-fade. Only react to changes
+        /// large enough to matter for the ceiling.
+        static let headroomEpsilon: Double = 0.02
     }
 
     private enum BrightnessThreshold {
