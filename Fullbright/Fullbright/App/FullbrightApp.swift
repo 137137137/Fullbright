@@ -31,8 +31,15 @@ struct FullbrightApp: App {
     }
 
     /// True while the XCTest/Swift-Testing bundle is hosted in this process.
+    /// The environment variables are set by the test runner before launch;
+    /// the class check alone missed Swift Testing runs (XCTest can load
+    /// after `init`), so the real app engaged XDR on the developer's display.
     static var isRunningUnitTests: Bool {
-        NSClassFromString("XCTestCase") != nil
+        let env = ProcessInfo.processInfo.environment
+        return env["XCTestConfigurationFilePath"] != nil
+            || env["XCTestBundlePath"] != nil
+            || env["XCTestSessionIdentifier"] != nil
+            || NSClassFromString("XCTestCase") != nil
     }
 
     var body: some Scene {

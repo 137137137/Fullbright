@@ -3,7 +3,7 @@
 //  Fullbright
 //
 //  Settings window view model. Does NOT import AppKit directly — dock
-//  visibility and URL opening both go through injected protocols.
+//  visibility goes through an injected protocol.
 //
 
 import Foundation
@@ -15,16 +15,11 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Setti
 @MainActor
 @Observable
 final class SettingsViewModel {
-    private let authManager: any AuthenticationManaging
     let updaterController: SPUStandardUpdaterController
     private let launchManager: any LaunchAtLoginManaging
     private let defaults: UserDefaults
     private let dockController: any DockVisibilityControlling
-    private let urlOpener: any URLOpening
 
-    var licenseKey = ""
-    private(set) var isActivating = false
-    var alertState: AlertInfo?
 
     var launchAtLogin: Bool {
         get { launchManager.isEnabled }
@@ -42,33 +37,15 @@ final class SettingsViewModel {
         set { dockController.isVisible = newValue }
     }
 
-    struct AlertInfo: Identifiable {
-        let id = UUID()
-        let title: String
-        let message: String
-    }
-
-    init(authManager: any AuthenticationManaging,
-         updaterController: SPUStandardUpdaterController,
+    init(updaterController: SPUStandardUpdaterController,
          launchManager: any LaunchAtLoginManaging,
          dockController: any DockVisibilityControlling,
-         urlOpener: any URLOpening,
          defaults: UserDefaults = .standard) {
-        self.authManager = authManager
         self.updaterController = updaterController
         self.launchManager = launchManager
         self.dockController = dockController
-        self.urlOpener = urlOpener
         self.defaults = defaults
-        #if DEBUG
-        self.debugActions = DebugAuthActions(authManager: authManager)
-        #endif
     }
-
-    // MARK: - Computed State
-
-    var authState: AuthenticationState { authManager.authState }
-    var isAuthenticated: Bool { authState.isAuthenticated }
 
     // MARK: - Updater Bindings
 
@@ -86,37 +63,9 @@ final class SettingsViewModel {
         updaterController.checkForUpdates(nil)
     }
 
-    // MARK: - License Actions
-
-    func activateLicense() async {
-        isActivating = true
-        let result = await authManager.activateLicense(licenseKey: licenseKey)
-        isActivating = false
-
-        switch result {
-        case .success:
-            alertState = AlertInfo(
-                title: "Success",
-                message: "Your license has been successfully activated!"
-            )
-            licenseKey = ""
-        case .failure(let message):
-            alertState = AlertInfo(
-                title: "Activation Failed",
-                message: message
-            )
-        }
-    }
-
-    func purchaseLicense() {
-        urlOpener.open(AppURL.purchaseLicense)
-    }
-
     // MARK: - Debug Actions
 
     #if DEBUG
-    let debugActions: DebugAuthActions
-
     /// Callback to trigger onboarding flow from settings (DEBUG only).
     var onShowOnboarding: (() -> Void)?
 

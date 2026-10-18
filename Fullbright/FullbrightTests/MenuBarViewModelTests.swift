@@ -14,9 +14,8 @@ struct MenuBarViewModelTests {
 
     private func makeViewModel(
         xdr: StubXDRController = StubXDRController(),
-        auth: StubAuthManager = StubAuthManager(),
         lifecycle: StubAppLifecycle = StubAppLifecycle()
-    ) -> (MenuBarViewModel, StubXDRController, StubAuthManager, StubAppLifecycle) {
+    ) -> (MenuBarViewModel, StubXDRController, StubAppLifecycle) {
         // SPUStandardUpdaterController is a concrete Sparkle type we can't
         // easily stub. Construct a real one — it's cheap and doesn't hit
         // the network until checkForUpdates is called.
@@ -27,23 +26,22 @@ struct MenuBarViewModelTests {
         )
         let vm = MenuBarViewModel(
             xdrController: xdr,
-            authManager: auth,
             updaterController: updater,
             appLifecycle: lifecycle
         )
-        return (vm, xdr, auth, lifecycle)
+        return (vm, xdr, lifecycle)
     }
 
     @Test("quitApp delegates to AppLifecycle.terminate")
     func quitApp_callsLifecycle() {
-        let (vm, _, _, lifecycle) = makeViewModel()
+        let (vm, _, lifecycle) = makeViewModel()
         vm.quitApp()
         #expect(lifecycle.terminateCallCount == 1)
     }
 
     @Test("activateApp delegates to AppLifecycle.activate")
     func activateApp_callsLifecycle() {
-        let (vm, _, _, lifecycle) = makeViewModel()
+        let (vm, _, lifecycle) = makeViewModel()
         vm.activateApp()
         #expect(lifecycle.activateCallCount == 1)
     }
@@ -52,59 +50,32 @@ struct MenuBarViewModelTests {
     func isXDRSupported_reflectsController() {
         let xdr = StubXDRController()
         xdr.isXDRSupported = true
-        let (vm, _, _, _) = makeViewModel(xdr: xdr)
+        let (vm, _, _) = makeViewModel(xdr: xdr)
         #expect(vm.isXDRSupported == true)
 
         xdr.isXDRSupported = false
         #expect(vm.isXDRSupported == false)
     }
 
-    @Test("canUseXDR reflects auth state")
-    func canUseXDR_reflectsAuthState() {
-        let auth = StubAuthManager()
-        auth.authState = .authenticated(licenseKey: "K")
-        let (vm, _, _, _) = makeViewModel(auth: auth)
-        #expect(vm.canUseXDR == true)
-
-        auth.authState = .expired
-        #expect(vm.canUseXDR == false)
-    }
-
-    @Test("setXDREnabled(true) enables when canUseXDR is true and not already enabled")
+    @Test("setXDREnabled(true) enables when not already enabled")
     func setXDREnabled_enablesWhenAllowed() {
         let xdr = StubXDRController()
-        let auth = StubAuthManager()
-        auth.authState = .authenticated(licenseKey: "K")
-        let (vm, _, _, _) = makeViewModel(xdr: xdr, auth: auth)
+        let (vm, _, _) = makeViewModel(xdr: xdr)
 
         vm.setXDREnabled(true)
         #expect(xdr.enableCallCount == 1)
     }
 
-    @Test("setXDRBrightness forwards the delta when trial/license allows")
+    @Test("setXDRBrightness forwards the delta")
     func setXDRBrightness_forwardsWhenAllowed() {
         let xdr = StubXDRController()
         xdr.isEnabled = true
         xdr.brightness = 0.5
-        let auth = StubAuthManager()
-        auth.authState = .authenticated(licenseKey: "K")
-        let (vm, _, _, _) = makeViewModel(xdr: xdr, auth: auth)
+        let (vm, _, _) = makeViewModel(xdr: xdr)
 
         vm.setXDRBrightness(0.8)
         #expect(xdr.adjustBrightnessCalls.count == 1)
         #expect(abs((xdr.adjustBrightnessCalls.first ?? 0) - 0.3) < 0.0001)
-    }
-
-    @Test("setXDRBrightness is a no-op when the trial is expired")
-    func setXDRBrightness_noOpWhenExpired() {
-        let xdr = StubXDRController()
-        xdr.isEnabled = true
-        let auth = StubAuthManager()
-        auth.authState = .expired
-        let (vm, _, _, _) = makeViewModel(xdr: xdr, auth: auth)
-
-        vm.setXDRBrightness(0.8)
-        #expect(xdr.adjustBrightnessCalls.isEmpty)
     }
 
     @Test("xdrBrightness and currentNits mirror the controller")
@@ -112,49 +83,18 @@ struct MenuBarViewModelTests {
         let xdr = StubXDRController()
         xdr.brightness = 0.75
         xdr.currentNits = 1050
-        let (vm, _, _, _) = makeViewModel(xdr: xdr)
+        let (vm, _, _) = makeViewModel(xdr: xdr)
         #expect(vm.xdrBrightness == 0.75)
         #expect(vm.currentNits == 1050)
-    }
-
-    @Test("setXDREnabled is a no-op when canUseXDR is false")
-    func setXDREnabled_noOpWhenNotAllowed() {
-        let xdr = StubXDRController()
-        let auth = StubAuthManager()
-        auth.authState = .expired
-        let (vm, _, _, _) = makeViewModel(xdr: xdr, auth: auth)
-
-        vm.setXDREnabled(true)
-        #expect(xdr.enableCallCount == 0)
     }
 
     @Test("setXDREnabled(false) disables XDR when currently enabled")
     func setXDREnabled_false_disablesXDR() {
         let xdr = StubXDRController()
         xdr.isEnabled = true
-        let auth = StubAuthManager()
-        auth.authState = .authenticated(licenseKey: "K")
-        let (vm, _, _, _) = makeViewModel(xdr: xdr, auth: auth)
+        let (vm, _, _) = makeViewModel(xdr: xdr)
 
         vm.setXDREnabled(false)
         #expect(xdr.disableCallCount == 1)
-    }
-
-    @Test("refreshAuthIfUnauthenticated refreshes only in notAuthenticated or expired states")
-    func refreshAuth_onlyWhenUnauthenticated() async {
-        let auth = StubAuthManager()
-        let (vm, _, _, _) = makeViewModel(auth: auth)
-
-        auth.authState = .notAuthenticated
-        await vm.refreshAuthIfUnauthenticated()
-        #expect(auth.refreshCallCount == 1)
-
-        auth.authState = .expired
-        await vm.refreshAuthIfUnauthenticated()
-        #expect(auth.refreshCallCount == 2)
-
-        auth.authState = .authenticated(licenseKey: "K")
-        await vm.refreshAuthIfUnauthenticated()
-        #expect(auth.refreshCallCount == 2) // unchanged
     }
 }

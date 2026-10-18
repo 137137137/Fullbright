@@ -2,7 +2,7 @@
 //  DefaultAppKitAdapters.swift
 //  Fullbright
 //
-//  Production implementations of AppLifecycle, URLOpening, and
+//  Production implementations of AppLifecycle and
 //  DockVisibilityControlling. Kept in the App layer because these are
 //  the only types in the main target that are ALLOWED to import AppKit
 //  on behalf of the rest of the codebase.
@@ -43,13 +43,6 @@ struct DefaultAppLifecycle: AppLifecycle {
                 try? await Task.sleep(for: .milliseconds(50))
             }
         }
-    }
-}
-
-@MainActor
-struct DefaultURLOpener: URLOpening {
-    func open(_ url: URL) {
-        NSWorkspace.shared.open(url)
     }
 }
 

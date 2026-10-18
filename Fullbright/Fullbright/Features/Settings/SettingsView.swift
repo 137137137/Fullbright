@@ -13,7 +13,6 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            licenseSection
             generalSection
             updatesSection
             aboutSection
@@ -25,83 +24,9 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .padding()
         .frame(minWidth: WindowSize.settingsWidth, minHeight: WindowSize.settingsHeight)
-        .alert(
-            viewModel.alertState?.title ?? "",
-            isPresented: Binding(
-                get: { viewModel.alertState != nil },
-                set: { if !$0 { viewModel.alertState = nil } }
-            ),
-            presenting: viewModel.alertState
-        ) { _ in
-            Button("OK") { viewModel.alertState = nil }
-        } message: { alert in
-            Text(alert.message)
-        }
     }
 
     // MARK: - Sections
-
-    private var licenseSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                switch viewModel.authState {
-                case .authenticated(let licenseId):
-                    Label("Licensed", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text(licenseId)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fontDesign(.monospaced)
-                        .textSelection(.enabled)
-
-                case .trial(let daysRemaining, let expiryDate):
-                    Text("Trial - \(daysRemaining) days remaining")
-                        .foregroundStyle(viewModel.authState.trialColor)
-                    Text("Expires \(expiryDate.formatted(date: .abbreviated, time: .omitted))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                case .expired:
-                    Label("No Active License", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-
-                case .notAuthenticated:
-                    Text("Not Activated")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if !viewModel.isAuthenticated {
-                HStack {
-                    TextField("License Key", text: $viewModel.licenseKey)
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(viewModel.isActivating)
-
-                    Button("Activate") {
-                        Task {
-                            await viewModel.activateLicense()
-                        }
-                    }
-                    .disabled(viewModel.licenseKey.isEmpty || viewModel.isActivating)
-
-                    if viewModel.isActivating {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                    }
-                }
-
-                HStack {
-                    Spacer()
-                    Button("Purchase Lifetime License") {
-                        viewModel.purchaseLicense()
-                    }
-                    .buttonStyle(.link)
-                }
-            }
-        } header: {
-            Text("License")
-        }
-    }
 
     private var generalSection: some View {
         Section {
@@ -174,13 +99,8 @@ struct SettingsView: View {
     #if DEBUG
     private var debugSection: some View {
         Section {
-            HStack {
-                Button("Set Test License") { Task { await viewModel.debugActions.setValidLicense() } }
-                Button("Clear License") { Task { await viewModel.debugActions.clearLicense() } }
-                Button("Reset Trial") { Task { await viewModel.debugActions.resetTrial() } }
-                Button("Show Onboarding") {
-                    viewModel.showOnboarding()
-                }
+            Button("Show Onboarding") {
+                viewModel.showOnboarding()
             }
         } header: {
             Text("Debug")

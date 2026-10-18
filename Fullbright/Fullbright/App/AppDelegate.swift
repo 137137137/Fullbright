@@ -105,8 +105,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // contract holds.
                 self?.coordinator?.dockController.isVisible = false
             }
-
-            self?.coordinator?.handleOnboardingCompleted()
         })
         onboardingWindowController?.showWindow(nil)
         onboardingWindowController?.window?.makeKeyAndOrderFront(nil)

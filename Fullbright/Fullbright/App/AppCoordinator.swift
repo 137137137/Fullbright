@@ -2,7 +2,8 @@
 //  AppCoordinator.swift
 //  Fullbright
 //
-//  Holds the app's dependency graph and reacts to auth-state transitions.
+//  Holds the app's dependency graph and keeps XDR and the brightness keys
+//  in step with the hardware.
 //  Construction lives in AppComposition.makeDependencies() — this file
 //  does NOT call `.init()` on any protocol-existential-typed field.
 //
@@ -18,7 +19,6 @@ private let logger = Logger(subsystem: AppIdentifier.serviceID, category: "Coord
 @Observable
 final class AppCoordinator {
     private let xdrController: any XDRControlling
-    private let authManager: any AuthenticationManaging
     let updaterController: SPUStandardUpdaterController
     let menuBarViewModel: MenuBarViewModel
     let settingsViewModel: SettingsViewModel
@@ -26,16 +26,13 @@ final class AppCoordinator {
     private let keyManager: any BrightnessKeyManaging
     private let osdController: any OSDShowing
     private let restoreGammaIfNeeded: @MainActor () -> Void
-    private let authStateObserver: any AuthStateObserving
     private let osdEventRouter: any OSDEventRouting
     let dockController: any DockVisibilityControlling
 
     init(dependencies: AppDependencies) {
         self.xdrController = dependencies.xdrController
         self.keyManager = dependencies.keyManager
-        self.authManager = dependencies.authManager
         self.osdController = dependencies.osdController
-        self.authStateObserver = dependencies.authStateObserver
         self.osdEventRouter = dependencies.osdEventRouter
         self.updaterController = dependencies.updaterController
         self.restoreGammaIfNeeded = dependencies.restoreGammaIfNeeded
@@ -43,35 +40,16 @@ final class AppCoordinator {
         self.menuBarViewModel = dependencies.menuBarViewModel
         self.settingsViewModel = dependencies.settingsViewModel
 
-        // Wire hardware input → XDR controller → OSD. This doesn't depend
-        // on auth state so it can happen first.
+        // Wire hardware input → XDR controller → OSD.
         osdEventRouter.attach(to: keyManager)
 
-
-        // Initial XDR sync reflects the starting authState (typically
-        // .notAuthenticated on first launch). Subsequent transitions
-        // are driven by the observer below.
         syncXDRState()
-
-        // Kick off the initial auth check and start the observer in a
-        // single Task. We await the observer's handshake so any auth
-        // state mutations downstream of auth.start() are guaranteed to
-        // fire transition callbacks.
-        let authManager = self.authManager
-        let authStateObserver = self.authStateObserver
-        Task { @MainActor [weak self] in
-            await authStateObserver.start { [weak self] _ in
-                self?.syncXDRState()
-            }
-            await authManager.start()
-        }
     }
 
     nonisolated deinit {
-        // AuthStateObserver's own deinit cancels its task; nothing else to
-        // clean up here. OSDEventRouter leaves its callback in place
-        // intentionally — the key manager is a long-lived singleton and
-        // recreating the callback on next init is explicit.
+        // OSDEventRouter leaves its callback in place intentionally — the
+        // key manager is a long-lived singleton and recreating the callback
+        // on next init is explicit.
     }
 
     // MARK: - App Lifecycle (called by AppDelegate)
@@ -89,21 +67,13 @@ final class AppCoordinator {
         }
     }
 
-    func handleOnboardingCompleted() {
-        if authManager.authState == .notAuthenticated {
-            let authManager = self.authManager
-            Task { @MainActor in await authManager.startTrial() }
-        }
-    }
-
     // MARK: - XDR state sync
 
     private func syncXDRState() {
         let supported = xdrController.isXDRSupported
-        let canUse = authManager.authState.canUseXDR
         let enabled = xdrController.isEnabled
 
-        if supported && canUse && !enabled {
+        if supported && !enabled {
             // Don't auto-enable after an unclean shutdown — if XDR had a
             // hand in it (e.g. the macOS 27 beta display blackout), auto
             // enabling would re-trigger it on every login. The user can
@@ -111,23 +81,19 @@ final class AppCoordinator {
             if xdrController.previousSessionEndedDirty {
                 logger.warning("Previous session ended dirty — skipping XDR auto-enable; waiting for manual toggle")
             } else {
-                logger.info("Enabling XDR (supported=\(supported), canUse=\(canUse))")
+                logger.info("Enabling XDR")
                 xdrController.enableXDR()
             }
-        } else if enabled && !canUse {
-            logger.info("Disabling XDR (canUse=\(canUse))")
-            xdrController.disableXDR()
         }
         syncKeyInterception()
     }
 
     /// Single source of truth for brightness-key interception: swallow
-    /// keys whenever the user is authorized (trial or license) on XDR
-    /// hardware — with XDR on, keys drive the unified pipeline; with XDR
-    /// off they drive the backlight in SDR range through our OSD.
-    /// Unauthorized (expired/no trial) hands the keys back to macOS.
+    /// keys on XDR hardware — with XDR on, keys drive the unified pipeline;
+    /// with XDR off they drive the backlight in SDR range through our OSD.
+    /// Without XDR hardware the keys stay with macOS.
     private func syncKeyInterception() {
-        let shouldIntercept = xdrController.isXDRSupported && authManager.authState.canUseXDR
+        let shouldIntercept = xdrController.isXDRSupported
         guard keyManager.intercepting != shouldIntercept else { return }
         keyManager.intercepting = shouldIntercept
         if shouldIntercept {

@@ -19,9 +19,7 @@ struct MenuBarContentView: View {
                         .font(MenuBarStyle.bodyFont)
                     Spacer()
                     Toggle("XDR Mode", isOn: Binding(
-                        get: {
-                            viewModel.canUseXDR ? viewModel.isXDREnabled : false
-                        },
+                        get: { viewModel.isXDREnabled },
                         set: { newValue in
                             viewModel.setXDREnabled(newValue)
                         }
@@ -29,14 +27,11 @@ struct MenuBarContentView: View {
                     .labelsHidden()
                     .controlSize(.mini)
                     .toggleStyle(.switch)
-                    .disabled(!viewModel.canUseXDR)
-                    .id(viewModel.canUseXDR)
                 }
                 .padding(.horizontal, MenuBarStyle.horizontalPadding)
                 .padding(.vertical, MenuBarStyle.xdrRowVerticalPadding)
 
-                // Brightness slider — same auth gate as the toggle, and
-                // inert while XDR itself is off.
+                // Brightness slider, inert while XDR itself is off.
                 HStack(spacing: 8) {
                     Image(systemName: "sun.min.fill")
                         .font(MenuBarStyle.captionFont)
@@ -56,7 +51,6 @@ struct MenuBarContentView: View {
                 }
                 .padding(.horizontal, MenuBarStyle.horizontalPadding)
                 .padding(.bottom, MenuBarStyle.xdrRowVerticalPadding)
-                .disabled(!viewModel.canUseXDR)
             } else {
                 Text("No XDR Display Detected")
                     .font(MenuBarStyle.bodyFont)
@@ -98,19 +92,6 @@ struct MenuBarContentView: View {
                 Button("Open Sparkle Testing...") {
                     NSWorkspace.shared.open(AppURL.sparkleTesting)
                 }
-                Divider()
-                Button("Set Trial: 14 days") { Task { await viewModel.debugActions.setTrialDays(14) } }
-                Button("Set Trial: 7 days") { Task { await viewModel.debugActions.setTrialDays(7) } }
-                Button("Set Trial: 3 days") { Task { await viewModel.debugActions.setTrialDays(3) } }
-                Button("Set Trial: 1 day") { Task { await viewModel.debugActions.setTrialDays(1) } }
-                Divider()
-                Button("Expire Trial") { Task { await viewModel.debugActions.expireTrial() } }
-                Button("Reset Trial") { Task { await viewModel.debugActions.resetTrial() } }
-                Divider()
-                Button("Activate Test License") { Task { await viewModel.debugActions.setValidLicense() } }
-                Button("Clear License") { Task { await viewModel.debugActions.clearLicense() } }
-                Divider()
-                Button("Print Debug Info") { Task { await viewModel.debugActions.printInfo() } }
             }
             .menuBarRowStyle()
             .foregroundStyle(.secondary)
@@ -119,52 +100,11 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            // Trial/license status at bottom (non-interactive)
-            statusBannerContent
-
             Button("Quit Fullbright") {
                 viewModel.quitApp()
             }
             .menuBarRowStyle()
         }
         .frame(width: MenuBarStyle.popoverWidth)
-        .task {
-            await viewModel.refreshAuthIfUnauthenticated()
-        }
-    }
-
-    // MARK: - Status Banner
-
-    @ViewBuilder
-    private var statusBannerContent: some View {
-        switch viewModel.authState {
-        case .trial:
-            if let text = viewModel.authState.trialStatusText {
-                statusBanner(
-                    text: text,
-                    color: viewModel.authState.trialColor
-                )
-            }
-            Divider()
-        case .expired:
-            statusBanner(text: "License Required", color: .red)
-            Divider()
-        case .authenticated:
-            EmptyView()
-        case .notAuthenticated:
-            EmptyView()
-        }
-    }
-
-    private func statusBanner(text: String, color: Color) -> some View {
-        HStack {
-            Text(text)
-                .font(MenuBarStyle.captionFont)
-                .foregroundStyle(color)
-            Spacer()
-        }
-        .padding(.horizontal, MenuBarStyle.horizontalPadding)
-        .padding(.vertical, MenuBarStyle.verticalPadding)
-        .allowsHitTesting(false)
     }
 }

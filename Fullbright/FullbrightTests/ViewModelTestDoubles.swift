@@ -19,12 +19,6 @@ final class StubAppLifecycle: AppLifecycle {
 }
 
 @MainActor
-final class StubURLOpener: URLOpening {
-    private(set) var openedURLs: [URL] = []
-    func open(_ url: URL) { openedURLs.append(url) }
-}
-
-@MainActor
 final class StubDockVisibilityController: DockVisibilityControlling {
     var isVisible: Bool = false
     private(set) var applyPersistedCallCount = 0
@@ -82,29 +76,6 @@ final class StubXDRController: XDRControlling {
         adjustBrightnessCalls.append(delta)
         brightness = max(0, min(1, brightness + delta))
     }
-}
-
-@MainActor
-@Observable
-final class StubAuthManager: AuthenticationManaging {
-    var authState: AuthenticationState = .notAuthenticated
-    @ObservationIgnored var startCallCount = 0
-    @ObservationIgnored var refreshCallCount = 0
-    @ObservationIgnored var startTrialCallCount = 0
-    @ObservationIgnored var activateLicenseCalls: [String] = []
-    @ObservationIgnored var nextActivationResult: LicenseActivationResult = .success
-    @ObservationIgnored var logoutCallCount = 0
-
-    func start() async { startCallCount += 1 }
-    func refreshAuthenticationState() async { refreshCallCount += 1 }
-    func startTrial() async { startTrialCallCount += 1 }
-
-    func activateLicense(licenseKey: String) async -> LicenseActivationResult {
-        activateLicenseCalls.append(licenseKey)
-        return nextActivationResult
-    }
-
-    func logout() async { logoutCallCount += 1 }
 }
 
 @MainActor

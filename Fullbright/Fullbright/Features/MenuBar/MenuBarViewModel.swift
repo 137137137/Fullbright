@@ -15,7 +15,6 @@ import Sparkle
 @Observable
 final class MenuBarViewModel {
     private let xdrController: any XDRControlling
-    private let authManager: any AuthenticationManaging
     private let appLifecycle: any AppLifecycle
     let updaterController: SPUStandardUpdaterController
 
@@ -24,25 +23,18 @@ final class MenuBarViewModel {
     let checkForUpdatesViewModel: CheckForUpdatesViewModel
 
     init(xdrController: any XDRControlling,
-         authManager: any AuthenticationManaging,
          updaterController: SPUStandardUpdaterController,
          appLifecycle: any AppLifecycle) {
         self.xdrController = xdrController
-        self.authManager = authManager
         self.updaterController = updaterController
         self.appLifecycle = appLifecycle
         self.checkForUpdatesViewModel = CheckForUpdatesViewModel(updater: updaterController.updater)
-        #if DEBUG
-        self.debugActions = DebugAuthActions(authManager: authManager)
-        #endif
     }
 
     // MARK: - Computed State
 
     var isXDRSupported: Bool { xdrController.isXDRSupported }
     var isXDREnabled: Bool { xdrController.isEnabled }
-    var canUseXDR: Bool { authManager.authState.canUseXDR }
-    var authState: AuthenticationState { authManager.authState }
     /// Unified brightness (0 = min, 0.5 = SDR max, 1 = XDR peak).
     var xdrBrightness: Float { xdrController.brightness }
     var currentNits: Int { xdrController.currentNits }
@@ -50,7 +42,6 @@ final class MenuBarViewModel {
     // MARK: - Actions
 
     func setXDREnabled(_ enabled: Bool) {
-        guard canUseXDR else { return }
         if enabled && !xdrController.isEnabled {
             _ = xdrController.enableXDR()
         } else if !enabled && xdrController.isEnabled {
@@ -58,10 +49,8 @@ final class MenuBarViewModel {
         }
     }
 
-    /// Slider entry point. Gated on auth (active trial or license) — the
-    /// same gate as the XDR toggle — and a no-op while XDR is off.
+    /// Slider entry point. A no-op while XDR is off.
     func setXDRBrightness(_ value: Float) {
-        guard canUseXDR else { return }
         xdrController.adjustBrightness(delta: value - xdrController.brightness)
     }
 
@@ -75,19 +64,4 @@ final class MenuBarViewModel {
     func activateApp() {
         appLifecycle.activate()
     }
-
-    func refreshAuthIfUnauthenticated() async {
-        switch authManager.authState {
-        case .notAuthenticated, .expired:
-            await authManager.refreshAuthenticationState()
-        case .authenticated, .trial:
-            break
-        }
-    }
-
-    // MARK: - Debug Actions
-
-    #if DEBUG
-    let debugActions: DebugAuthActions
-    #endif
 }

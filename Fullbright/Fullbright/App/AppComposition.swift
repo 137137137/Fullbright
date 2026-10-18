@@ -25,9 +25,7 @@ import Sparkle
 struct AppDependencies {
     let xdrController: any XDRControlling
     let keyManager: any BrightnessKeyManaging
-    let authManager: any AuthenticationManaging
     let osdController: any OSDShowing
-    let authStateObserver: any AuthStateObserving
     let osdEventRouter: any OSDEventRouting
     let updaterController: SPUStandardUpdaterController
     let restoreGammaIfNeeded: @MainActor () -> Void
@@ -44,43 +42,7 @@ enum AppComposition {
     /// originates here.
     static func makeDependencies() -> AppDependencies {
         // --- Foundation layer ---
-        let keychain: any KeychainProviding = KeychainManager()
-        let deviceIdentifier: any DeviceIdentifying = DeviceIdentifier()
-        let integrityChecker: any IntegrityChecking = IntegrityChecker()
         let dirtyFlagStore: any XDRDirtyFlagStoring = UserDefaultsXDRDirtyFlagStore()
-
-        // --- Storage layer ---
-        let storage = SecureFileStorage(
-            keychain: keychain,
-            deviceIdentifier: deviceIdentifier
-        )
-
-        // --- Network layer ---
-        let pinningManager = CertificatePinningManager()
-        let authServerClient = AuthServerClient(
-            session: pinningManager.createPinnedURLSession()
-        )
-
-        // --- Auth stack ---
-        let trialManager = TrialManager(
-            storage: storage,
-            serverClient: authServerClient,
-            keychain: keychain,
-            deviceIdentifier: deviceIdentifier
-        )
-        let licenseManager = LicenseManager(
-            storage: storage,
-            serverClient: authServerClient,
-            deviceIdentifier: deviceIdentifier
-        )
-        let integrityMonitor = IntegrityMonitor(checker: integrityChecker)
-        let authManager: any AuthenticationManaging = SecureAuthenticationManager(
-            integrityChecker: integrityChecker,
-            integrityMonitor: integrityMonitor,
-            deviceIdentifier: deviceIdentifier,
-            trialManager: trialManager,
-            licenseManager: licenseManager
-        )
 
         // --- Display/hardware stack ---
         let displayServices = DisplayServicesClient()
@@ -106,7 +68,6 @@ enum AppComposition {
             xdrController: xdrController,
             osdController: osdController
         )
-        let authStateObserver: any AuthStateObserving = AuthStateObserver(authManager: authManager)
 
         let updaterController = SPUStandardUpdaterController(
             startingUpdater: true,
@@ -116,22 +77,18 @@ enum AppComposition {
 
         // --- AppKit adapters (the ONLY place ViewModels touch AppKit) ---
         let appLifecycle: any AppLifecycle = DefaultAppLifecycle()
-        let urlOpener: any URLOpening = DefaultURLOpener()
         let dockController: any DockVisibilityControlling = DefaultDockVisibilityController()
         let launchManager: any LaunchAtLoginManaging = LaunchAtLoginManager()
 
         let menuBarViewModel = MenuBarViewModel(
             xdrController: xdrController,
-            authManager: authManager,
             updaterController: updaterController,
             appLifecycle: appLifecycle
         )
         let settingsViewModel = SettingsViewModel(
-            authManager: authManager,
             updaterController: updaterController,
             launchManager: launchManager,
-            dockController: dockController,
-            urlOpener: urlOpener
+            dockController: dockController
         )
 
         // Capture the shared dirty store so crash recovery runs through
@@ -143,9 +100,7 @@ enum AppComposition {
         return AppDependencies(
             xdrController: xdrController,
             keyManager: keyManager,
-            authManager: authManager,
             osdController: osdController,
-            authStateObserver: authStateObserver,
             osdEventRouter: osdEventRouter,
             updaterController: updaterController,
             restoreGammaIfNeeded: restoreGammaIfNeeded,
