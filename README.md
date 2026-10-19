@@ -45,7 +45,7 @@
 
 MacBook Pro XDR displays go up to 1600 nits but macOS caps you at ~500 in normal use. Fullbright removes that cap.
 
-Menu bar app. Toggles XDR. Intercepts your brightness keys and gives you control over the full 1-1600 nit range. Uses Apple's private SkyLight framework to switch display presets.
+Menu bar app. Toggles XDR. Intercepts your brightness keys and gives you control over the full 1-1600 nit range. Opens the display's EDR headroom with a tiny HDR surface and rewrites the gamma table so the desktop uses it.
 
 Free and open source. I wanted something simple that just did this one thing.
 
@@ -87,7 +87,7 @@ Custom OSD shows current nits. Bottom half of the slider is SDR (1-500 nits), to
 1. Night Shift off (its tint would be baked into the gamma baseline), ColorSync restored, and a fresh gamma baseline captured
 2. Hardware and linear brightness to 1.0, with the gamma table dimmed by the same amount in the same frame so the screen doesn't flash
 3. Ambient light compensation off (it fights gamma changes)
-4. A 2×2 borderless window presents EDR-white Metal frames at 5 fps, which makes the window server grant EDR headroom
+4. A 2×2 borderless window presents EDR-white Metal frames at 5 fps, which makes the window server grant EDR headroom. Gamma values above 1.0 clip unless headroom is granted, so this step and the gamma table only work together
 5. At launch, `SLSConfigureDisplayEnabled` (SkyLight) is called with modes 4, 3, 5, 2, committed for the session only
 
 **Brightness:** the default gamma table is captured once, R/G/B are scaled with vDSP, and each change is a ~0.35s smoothstep fade. A read-back every 2s reapplies the table if something else overwrote it, and turns XDR off if writes keep failing.
@@ -150,7 +150,7 @@ Fullbright/
 
 MVVM, `@Observable`, protocol DI via `AppComposition`. Display ops on `@MainActor`. CGEventTap callback is C convention, uses `OSAllocatedUnfairLock` for cross-thread state.
 
-Private frameworks: `SkyLight` (display presets), `DisplayServices` (brightness), `CoreBrightness` (Night Shift).
+Private frameworks: `SkyLight` (display configuration), `DisplayServices` (brightness), `CoreBrightness` (Night Shift).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
